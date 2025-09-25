@@ -109,14 +109,36 @@ df_long <- df_long %>% mutate(across(contains("compartor_group mean_"), as.chara
 df_long <- df_long %>% mutate(across(contains("comparator_group SD_"), as.character))
 df_long <- df_long %>% mutate(across(contains("comparator_group p-value_"), as.character))
 df_long <- df_long %>% mutate(across(contains("compartor_group median_"), as.character))
+df_long <- df_long %>% mutate(across(contains("comparator_group median_"), as.character))
 df_long <- df_long %>% mutate(across(contains("compartor_group SD_"), as.character))
 
-# reshape df_long to into a longer format, in which all variables ending with _1, _2, up to _20 are brought together in the same variable, so that for each number there is one row
+# reshape df_long to into a longer format, in which all variables ending with _1, _2, up to _20 (the numerical indicators) are brought together in the same variable, so that for each number there is one row
 df_longer <- df_long %>%  pivot_longer(
     cols = matches("_(?:[1-9]|1[0-9]|20)$"),   # matches _1 to _20
     names_to = c(".value", "set"),             # .value keeps base var names
     names_pattern = "(.*)_(\\d+)$")
 colnames(df_longer)
+
+# reshape into an even longer format, in which all variables containing Number_1, Number_2, etc. (the categorical indicators) are brought together in the same variable
+print(colnames(df_longer), max = 1900)
+table(df_longer$`Number_1 Resistant_group_definition`)
+table(df_longer$`Number_1 Variable_description`)
+
+df_longer <- df_longer %>%
+  rename_with(~ str_replace(.x, "^(Number|Proportion)_(\\d+) (.*)$", "\\1 \\3_\\2")) # put the sequential numbers at the end
+
+df_longer <- df_longer %>% mutate(across(contains("Number Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
+df_longer <- df_longer %>% mutate(across(contains("Number Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
+df_longer <- df_longer %>% mutate(across(contains("Proportion Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
+df_longer <- df_longer %>% mutate(across(contains("Proportion Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
+df_longer <- df_longer %>% mutate(across(contains("Proportion Total_"), as.character)) # same format of variables that are combined in the longer df
+df_longer <- df_longer %>% mutate(across(contains("Proportion p-value_"), as.character)) # same format of variables that are combined in the longer df
+
+df_longer2 <- df_longer %>%  pivot_longer(
+  cols = matches("_(?:[1-9]|1[0-9]|2[0-9]|3[0-8])$"),   # matches _1 to _38
+  names_to = c(".value", "set2"),             # .value keeps base var names
+  names_pattern = "(.*)_(\\d+)$")
+colnames(df_longer2)
 
 # probably still needs an even longer data format (df_longest?), to have all measures of association grouped in a single variable, instead of a separate column for each
 
@@ -148,12 +170,13 @@ ggplot(world_data) +
   theme_minimal() +
   labs(
     title = "Number of studies per country",
-    fill = "Studies" ) + 
+    fill = "n studies" ) + 
   scale_fill_distiller(
   palette = "YlOrRd",  # yellow → orange → red
   direction = 1,
-  na.value = "grey90"
-)
+  na.value = "grey90")
+ggsave(filename = "map.jpeg",  width = 8, height = 5, dpi = 300)
+
 # 1.2 level of healthcare
 df <- df %>%
   mutate(facilitylevel = case_when(
@@ -189,6 +212,8 @@ ggplot(df_summary, aes(x = facilitylevel, y = n, fill = facilitylevel)) +
     plot.background = element_rect(fill = "white", color = NA),
     panel.background = element_rect(fill = "white", color = NA)
   )
+ggsave(filename = "bar_chart_healthcare_level.jpeg",  width = 8, height = 5, dpi = 300)
+
 # 1.3. patient population
 patientpop <- df %>% select(Population_admitting_ward) %>%
   mutate(Population_admitting_ward = str_split(Population_admitting_ward, ";")) %>%
@@ -240,6 +265,7 @@ ggplot(patientpop_summary, aes(x = reorder(Population_admitting_ward, n), y = n,
     plot.background = element_rect(fill = "white", color = NA),
     panel.background = element_rect(fill = "white", color = NA)
   )
+ggsave(filename = "bar_chart_study_population.jpeg",  width = 8, height = 5, dpi = 300)
 
 # bacterial isolates
 isolates <- df %>%
@@ -288,6 +314,7 @@ ggplot(isolate_summary, aes(x = reorder(isolate, n), y = n, fill = isolate)) +
     panel.grid.major.x = element_line(color = "grey80"),
     plot.caption = element_text(hjust = 0, size = 9, color = "grey40")
   )
+ggsave(filename = "bar_chart_bacterial_isolates_analysed.jpeg",  width = 8, height = 5, dpi = 300)
 
 # summarize AMR profiles
 counts <- df_long %>%
@@ -302,6 +329,7 @@ ggplot(counts, aes(x = fct_reorder(Resistance_group, n), y = n)) +
     title = "Distribution of reported AMR profiles in the analysis"
   ) +
   theme_minimal(base_size = 13)
+ggsave(filename = "bar_chart_AMR_profiles.jpeg",  width = 8, height = 5, dpi = 300)
 
 # create a variable for each pathogen-antibiotic combination
 
@@ -310,6 +338,62 @@ ggplot(counts, aes(x = fct_reorder(Resistance_group, n), y = n)) +
 
 
 #### 2. SUMMARY OF PROXY INDICATORS ####
-# exposures of interest that are potential indicators are saved under variable "resistant_group variable-1_name"??
-table(df$`resistant_group variable-1_name`)
+# exposures of interest that are potential indicators are saved under variable "resistant_group variable" - TO CONFIRM
+# count numerical indicators reported
+summary_num_indicators <- df_longer %>%
+  filter(!is.na(`resistant_group variable`)) %>%
+  select(`resistant_group variable`) %>%
+  summarise(n=n())
+summary_num_indicators # 484 indicators reported
+# count categorical indicators reported
+length(unique(df_longer2$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
+length(unique(df_longer2$`Proportion Variable_description`))
 
+# create categories to group reported indicators in
+df_longer2 <- df_longer2 %>%  mutate(indicatorcategory = case_when(
+    str_detect(`resistant_group variable`, regex("age.*years|Age", ignore_case = TRUE)) ~ "Age",
+    str_detect(`resistant_group variable`, regex("gestation|birthweight|crib", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
+    str_detect(`resistant_group variable`, regex("apgar", ignore_case = TRUE)) ~ "Apgar score",
+    str_detect(`resistant_group variable`, regex("apache|mccabe|sofa|pitt|pneumonia severity index|psis|saps|Severity grade", ignore_case = TRUE)) ~ "Clinical severity score",
+#    str_detect(`resistant_group variable`, regex("hospital stay", ignore_case = TRUE)) ~ "Prior hospital stay (categorical)",
+    str_detect(`resistant_group variable`, regex("hospital stay.*days|Length of stay|LOS,days|Length of hospital|Time from admission|Length of hospital stay, total days|Days of admission before infection", ignore_case = TRUE)) ~ "Duration hospital stay (ordinal)",
+    str_detect(`resistant_group variable`, regex("Days from admission to positive culture|Days from hospital admission to BSI|Total LOS|Duration of time from hospital admission to positive blood culture", ignore_case = TRUE)) ~ "Duration hospital stay (ordinal)",
+    str_detect(`resistant_group variable`, regex("Total days of hospitalization in the 6 months prior to current hospitalization|Admission days prior to index culture|Index hospital stay|Sequential time to positivity|Time to positivity ratio", ignore_case = TRUE)) ~ "Duration hospital stay (ordinal)", # double check Sequential time to positivity and Time to positivity ratio
+    str_detect(`resistant_group variable`, regex("ICU", ignore_case = TRUE)) ~ "Prior ICU stay (categorical)",
+    str_detect(`resistant_group variable`, regex("ICU stay days", ignore_case = TRUE)) ~ "Prior ICU stay (ordinal)",
+    str_detect(`resistant_group variable`, regex("daptomycin dose|Quantitative indices of antibiotic usage|Total antibiotic treatment", ignore_case = TRUE)) ~ "Antibiotic exposure (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
+    str_detect(`resistant_group variable`, regex("DDDs|Days of extended-spectrum|Days of third-|Days of carbapenem|Days of aminoglyc|Total days of antibiotic", ignore_case = TRUE)) ~ "Antibiotic exposure (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
+    str_detect(`resistant_group variable`, regex("number of different antibiotics used|Antibiotic-days|Duration of exposure to antimicrobial agent, days", ignore_case = TRUE)) ~ "Antibiotic exposure (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
+    
+    str_detect(`resistant_group variable`, regex("Therapy with antibiotics prior 30 days of infection - |Types of antibiotics", ignore_case = TRUE)) ~ "Antibiotic exposure (categorical)",
+
+    str_detect(`resistant_group variable`, regex("LOS from culture to discharge|Survival time|time to first negative blood culture|Survival|LOS after bacteremia", ignore_case = TRUE)) ~ "Patient outcomes", # still check if survival is defined as time until death or time until discharge 
+    `resistant_group variable`== "Hospital days" ~ "Patient outcomes", # there's a note that states it is likely total admission, and not just prior or after BSI
+    str_detect(`resistant_group variable`, regex("charlson|absi", ignore_case = TRUE)) ~ "Comorbidity score",
+    str_detect(`resistant_group variable`, regex("absi", ignore_case = TRUE)) ~ "Burn severity",
+    str_detect(`resistant_group variable`, regex("ntiss", ignore_case = TRUE)) ~ "Neonatal intervention scoring",
+    str_detect(`resistant_group variable`, regex("temperatu|blood pressure", ignore_case = TRUE)) ~ "Vital sign",
+    str_detect(`resistant_group variable`, regex("creatinine|bilirubin|cholinest|total protein|albumin|LDH|CKMB|urea nitrogen|uric acid", ignore_case = TRUE)) ~ "Kidney/liver lab values",
+    str_detect(`resistant_group variable`, regex("neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Blood lab values",
+    str_detect(`resistant_group variable`, regex("tnf|procalciton|crp", ignore_case = TRUE)) ~ "Inflammatory lab values",
+str_detect(`resistant_group variable`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
+
+    str_detect(`resistant_group variable`, regex("comorbidity|diabetes|cirrhosis|hypertens", ignore_case = TRUE)) ~ "NCD",
+    str_detect(`resistant_group variable`, regex("cost|economic|burden|usd|eur|cny|sgd|jpy", ignore_case = TRUE)) ~ "Costs / economic",
+  str_detect(`resistant_group variable`, regex("Time to appropriate therapy|Time to adequate antibiotic therapy|Overall time to first dose of appropriate antibiotic therapy|Hours to active antibiotic therapy|Time to microbiologically appropriate antibiotic therapy", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
+    TRUE ~ "Other"
+  ))
+# display all numerical indicators
+numindicators <- df_longer2 %>%
+  filter(!is.na(`resistant_group variable`)) %>%
+  select(`resistant_group variable`, indicatorcategory, `resistant_group notes`) %>%
+  distinct()
+numindicators
+write_xlsx(numindicators, "numindicators.xlsx")
+# display all categorical indicators
+catindicators <- df_longer2 %>%
+  filter(!is.na(`Proportion Variable_description`)) %>%
+  select(`Proportion Variable_description`)  %>%
+  distinct()
+catindicators
+write_xlsx(catindicators, "catindicators.xlsx")
