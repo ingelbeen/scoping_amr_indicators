@@ -24,13 +24,10 @@ table(df$Outcome_measure_repoted)
 # excluding analyses that do not analyze AMR as an outcome measure
 df <- df %>% filter(str_detect(Outcome_measure_repoted, regex("AMR \\(ie development/ incidence/ emergence / change in AMR\\)", ignore_case = TRUE)))
 
-# TEMPORARILY exclude columns beyond the proxy-indicators part of the data extraction table (up to the notes of proxy indicator 20)
-df <- df[, 1:408]
-
 # we need three databases for the planned analyses: 
-# 1) one with one row/observation per study, to summarize study characteristics,  
-# 2) one with a row per analysis (i.e, comparison AMR vs susceptible) done, to report on the associations measured (longer format) -> one row per comparison (so-called 'model')
-# 3) one with a row per variable of interest (indicator/predictor) reported, to summarize proxy indicators
+# 1) one with one row/observation per study, to summarize study characteristics -> df
+# 2) one with a row per analysis (i.e, comparison AMR vs susceptible) done, to report on the associations measured -> df_long with one row per comparison (so-called 'model')
+# 3) one with a row per variable of interest (indicator/predictor) reported, to summarize proxy indicators -> three different df_longer: one numeric, one categorical, one ?
 
 # create df_long, transforming the dataframe df to a long format with a row for each comparison of R vs S (model_1, model_2 and model_3)
 df$`resistant_group SD_2` <- as.character(df$`resistant_group SD_2`) # vars need to be in the same format to be combined
@@ -47,7 +44,7 @@ df_long <- df %>%
 # remove rows which don't contain a comparison -> 216 had model 1, another 24 had a model 2, another 5 had a model 3
 df_long <- df_long %>% filter(!is.na(Resistant_grp_definition))
 
-# clean resistance profiles
+# clean resistance profiles & group resistance profiles in a variable amr
 table(df_long$Resistant_grp_definition, useNA = "always")
 # replace non specific 'resistance' by other variable values that have the specific resistance profile studied
 df_long <- df_long %>%
@@ -56,13 +53,10 @@ df_long <- df_long %>%
       Resistant_grp_definition %in% c("AMR", "Resistant", "Resistance +", "MRO", "MDRO", "Resistance to First-line Antibiotics") ~ 
         coalesce(AMR_mechanism_1, AMR_mechanism_2, Resistant_grp_definition),
       TRUE ~ Resistant_grp_definition))
-resist_models <- as.data.frame(table(df_long$Resistant_grp_definition, useNA = "always"))
-write.table(resist_models, "resist_models.txt")
+# resist_models <- as.data.frame(table(df_long$Resistant_grp_definition, useNA = "always"))
+# write.table(resist_models, "resist_models.txt")
 
-# group other values
-df_long <- df_long %>%
-  mutate(
-    amr = case_when(
+df_long <- df_long %>%  mutate(amr = case_when(
       grepl("MRSA", Resistant_grp_definition, ignore.case = TRUE) ~ "methicillin resistance",
       grepl("ESBL", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
       grepl("VRE", Resistant_grp_definition, ignore.case = TRUE) ~ "vancomycin resistance",
@@ -104,8 +98,10 @@ df_long <- df_long %>%
       TRUE ~ Resistant_grp_definition))   # keep original for unique/rare categories
 table(df_long$amr)
 
-# create 'indicators', an even longer df, with one row per variable/exposure of interest reported
-colnames(df_long)
+# check columns
+print(colnames(df_long), max = 1900)
+
+# create an even longer df, with one row per variable/exposure of interest reported
 df_long <- df_long %>% rename_with(~ str_replace_all(., "-(\\d+)_name", "_\\1")) # make sure all variable names belonging to the same indicator have the same number at the end
 # reformat variables that should be combined
 df_long <- df_long %>% mutate(across(contains("resistant_group mean_"), as.character))
@@ -119,38 +115,23 @@ df_long <- df_long %>% mutate(across(contains("compartor_group median_"), as.cha
 df_long <- df_long %>% mutate(across(contains("comparator_group median_"), as.character))
 df_long <- df_long %>% mutate(across(contains("compartor_group SD_"), as.character))
 
-# reshape df_long to into a longer format, in which all variables ending with _1, _2, up to _20 (the numerical indicators) are brought together in the same variable, so that for each number there is one row
-df_longer <- df_long %>%  pivot_longer(
+# DESCRIPTIVE_continuous_proxy-indicators -> exclude columns beyond the first proxy-indicators part of the data extraction table (up to the notes of proxy indicator 20)
+continuous_df <- df_long %>% 
+  select(1:393, amr, Model, Resistant_grp_definition, Resistant_group_tot_nb,
+         Susceptible_group_definition, Susceptible_group_tot_nb)
+
+# reshape continuous_df to into a longer format, in which all variables ending with _1, _2, up to _20 (the numerical indicators) are brought together in the same variable, so that for each number there is one row
+continuous_df <- continuous_df %>%  pivot_longer(
     cols = matches("_(?:[1-9]|1[0-9]|20)$"),   # matches _1 to _20
     names_to = c(".value", "set"),             # .value keeps base var names
     names_pattern = "(.*)_(\\d+)$")
-colnames(df_longer)
+colnames(continuous_df)
 
-# reshape into an even longer format, in which all variables containing Number_1, Number_2, etc. (the categorical indicators) are brought together in the same variable
-# TEMPORARILY this part does nothing since I now excluded these columns from df - LINE 144 WILL GIVE AN ERROR
-print(colnames(df_longer), max = 1900)
-table(df_longer$`Number_1 Resistant_group_definition`)
-table(df_longer$`Number_1 Variable_description`)
+# get rid of empty rows (per study model, up to 20 indicators reported, but usually les, so many rows are empty)
+continuous_df <- continuous_df %>% filter(!is.na(`resistant_group definition`))
 
-df_longer <- df_longer %>%
-  rename_with(~ str_replace(.x, "^(Number|Proportion)_(\\d+) (.*)$", "\\1 \\3_\\2")) # put the sequential numbers at the end
-
-df_longer <- df_longer %>% mutate(across(contains("Number Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
-df_longer <- df_longer %>% mutate(across(contains("Number Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
-df_longer <- df_longer %>% mutate(across(contains("Proportion Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
-df_longer <- df_longer %>% mutate(across(contains("Proportion Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
-df_longer <- df_longer %>% mutate(across(contains("Proportion Total_"), as.character)) # same format of variables that are combined in the longer df
-df_longer <- df_longer %>% mutate(across(contains("Proportion p-value_"), as.character)) # same format of variables that are combined in the longer df
-
-df_longer <- df_longer %>%  pivot_longer(
-  cols = matches("_(?:[1-9]|1[0-9]|2[0-9]|3[0-8])$"),   # matches _1 to _38
-  names_to = c(".value", "set2"),             # .value keeps base var names
-  names_pattern = "(.*)_(\\d+)$")
-colnames(df_longer)
-
-# create categories to group reported indicators 
-# 1) the numeric ones in "resistant_group variable"
-df_longer <- df_longer %>%  mutate(indicatorcategory = case_when(
+# create categories to group reported indicators -> continuous indicators reported in "resistant_group variable"
+continuous_df <- continuous_df %>%  mutate(indicatorcategory = case_when(
   str_detect(`resistant_group variable`, regex("age.*years", ignore_case = TRUE)) ~ "Age",
   str_detect(`resistant_group variable`, regex("gestation|birthweight|crib", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
   str_detect(`resistant_group variable`, regex("apache|mccabe|sofa|pitt|pneumonia severity index|psis|saps|Severity grade", ignore_case = TRUE)) ~ "Clinical severity score",
@@ -290,19 +271,56 @@ df_longer <- df_longer %>%  mutate(indicatorcategory = case_when(
   `resistant_group variable` %in% c("Infection or colonization of K. pneumoniae in previous 84 days") ~ "Prior infection/colonisation",
   TRUE ~ "Other"))
 
-table(df_longer$`resistant_group variable`[df_longer$indicatorcategory=="Other"]) # the remaning "Other" seem fine now, each reported just once
+table(continuous_df$`resistant_group variable`[continuous_df$indicatorcategory=="Other"]) # the remaning "Other" seem fine now, each reported just once
 
 # display all numerical indicators
-numindicators <- df_longer %>%
+numindicators <- continuous_df %>%
   filter(!is.na(`resistant_group variable`)) %>%
   select(`resistant_group variable`, indicatorcategory, `resistant_group notes`) %>%
   distinct()
 numindicators
 write_xlsx(numindicators, "numindicators.xlsx")
 
-# 2) the categorical ones in `Proportion Variable_description` -> NEED TO BE FURTHER CLEANED - some labels might be added that are mistakenly added
-df_longer <- df_longer %>%
-  mutate(
+# keep only essential variables, filter out the sets without numbers entered, then remove duplicates
+print(colnames(continuous_df), max = 1900)
+continuous_dfshort <- continuous_df %>% select(`Study ID`, Study_ID, Study_country, Publication_year, Study_setting, Model, set, amr, Resistant_group_tot_nb, 
+                             Susceptible_group_definition, Susceptible_group_tot_nb, indicatorcategory, `resistant_group variable`, #`Proportion Variable_description`,
+                            `resistant_group p-value` #, 
+                             # set2, `Number Resistant_group_value`, `Number Susceptible_comparator_group_value`, `Number p-value`, `Number Total`
+                            ) %>%
+  filter(!is.na(`resistant_group variable`)) %>%
+  distinct()
+
+# DESCRIPTIVE_dichotomous_proxy-indicators -> reshape the second part of df_long in a longer format, in which all variables containing the categorical indicators Number_1, Number_2, etc. are brought together in the same variable
+print(colnames(df_long), max = 1900)
+# check if the order of descriptive dichotomous and the univariate dichotomous variables correspond
+check <- df_long %>% group_by(`Proportion_1 Variable_description`, `Number_1 Variable_description`, `Predictor_1 Definition...1468`, `Predictor_1 Definition...1717`) %>% summarise((n=n()))
+
+categorical_df <- df_long %>% 
+  select(1:32, 394:965, amr, Model, Resistant_group_tot_nb, Susceptible_group_tot_nb)
+check <- categorical_df %>% group_by(`Number_1 Resistant_group_definition`, Resistant_grp_definition, amr, Susceptible_group_definition) %>% summarise(n=n())
+
+categorical_df <- categorical_df %>%
+  rename_with(~ str_replace(.x, "^(Number|Proportion|95%CI)_(\\d+) (.*)$", "\\1 \\3_\\2")) # put the sequential numbers at the end
+
+categorical_df <- categorical_df %>% mutate(across(contains("Number Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("Number Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("Proportion Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("Proportion Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("Proportion Total_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("Proportion p-value_"), as.character)) # same format of variables that are combined in the longer df
+
+categorical_df <- categorical_df %>%  pivot_longer(
+  cols = matches("_(?:[1-9]|1[0-9]|2[0-9]|3[0-8])$"),   # matches _1 to _38
+  names_to = c(".value", "set2"),             # .value keeps base var names
+  names_pattern = "(.*)_(\\d+)$")
+colnames(categorical_df)
+
+# get rid of empty rows (per study model, up to 38 indicators reported, but usually les, so many rows are empty)
+categorical_df <- categorical_df %>% filter(!is.na(`Number Variable_description`))
+
+# regroup the categorical exposures of interest/indicators in `Proportion Variable_description` -> NEED TO BE FURTHER CLEANED - some labels might be added that are mistakenly added
+categorical_df <- categorical_df %>%  mutate(
     indicatorcategory = case_when( # replace by indicatorcategory when done
       str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|healthcare-associated|Hospital-acquired|Recent international healthcare exposure|nosocomial", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
       str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
@@ -346,10 +364,10 @@ df_longer <- df_longer %>%
       str_detect(`Proportion Variable_description`, regex("Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary infection site",
       TRUE ~ "Other"
     ))
-table(df_longer$indicatorcategory)
+table(categorical_df$indicatorcategory)
 
 # display all categorical indicators
-catindicators <- df_longer %>%
+catindicators <- categorical_df %>%
   filter(!is.na(`Proportion Variable_description`)) %>%
   select(`Proportion Variable_description`, indicatorcategory, `resistant_group notes`)  %>%
   distinct()
@@ -364,18 +382,7 @@ catindicatorsother <- df_longer %>%
 catindicatorsother
 write_xlsx(catindicatorsother, "catindicatorsother.xlsx")
 
-# keep only essential variables, filter out the sets without numbers entered, then remove duplicates
-print(colnames(df_longer), max = 1900)
-dfshort <- df_longer %>% select(`Study ID`, Study_ID, Study_country, Publication_year, Study_setting, Model, set, amr, Resistant_group_tot_nb, 
-                             Susceptible_group_definition, Susceptible_group_tot_nb, indicatorcategory, `resistant_group variable`, #`Proportion Variable_description`,
-                            `resistant_group p-value` #, 
-                             # set2, `Number Resistant_group_value`, `Number Susceptible_comparator_group_value`, `Number p-value`, `Number Total`
-                            ) %>%
-  filter(!is.na(`resistant_group variable`)) %>%
-  distinct()
-
-
-
+# STILL TO DO: LINK THE UNIVAR PART TO THE PREVIOUS DESCRIPTIVE PARTS
 # recalculate an or based on the reported numbers (except when the exposure is numeric - for those we will need to use the p value since SD or SE are not systematically reported)
 df3$n_exposed_resistant <- df3$`Number Resistant_group_value`
 df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="834 (316-2506)"] <- "834"
@@ -398,20 +405,7 @@ df_longer %>% mutate(`Number Resistant_group_value` = str_extract(`Number Resist
 table(df_longer$`Number Resistant_group_value`)
 df3$or <- (df3$`Number Resistant_group_value`/ )/ (df3$`Number Susceptible_comparator_group_value`/)
 
-table(df_long$amr)
-table(df_longer$`Number Total`)
 
-# probably still needs:
-# 1) another wide to long transformation, for when "predictors" are reported, then combine the different long formats after getting rid of the unnecessary or empty variables 
-# 2) an even longer data format (df_longest?), to have all measures of association grouped in a single variable, instead of a separate column for each
-colnames(df_longer)
-# measures of association are:
-table(df_longer$`Proportion p-value`)
-table(df_longer$`Number p-value`)
-#check if predictors correspond to the indicators reported - not so
-table(df_longer$indicatorcategory[df_longer$`Predictor_1 Definition...1468`=="Age (years)"])
-
-table(df_longer$Outcome_measure_repoted)
 
 #### 1. DESCRIPTION OF STUDIES ####
 # 1.1 create a map with the frequency of studies by country
@@ -609,22 +603,21 @@ ggsave(filename = "bar_chart_AMR_profiles.jpeg",  width = 8, height = 5, dpi = 3
 
 
 #### 2. SUMMARY OF PROXY INDICATORS ####
-# exposures of interest that are potential indicators are saved under variable "resistant_group variable" - TO CONFIRM
-# count numerical indicators reported
-summary_num_indicators <- df_longer %>%
+# 2.1. CONTINUOUS VARIABLES
+# count continuous indicators reported
+summary_num_indicators <- continuous_df %>%
   filter(!is.na(`resistant_group variable`)) %>%
   select(`resistant_group variable`) %>%
   summarise(n=n())
 summary_num_indicators # 484 indicators reported
-# count categorical indicators reported
-length(unique(df_longer$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
-length(unique(df_longer$`Proportion Variable_description`))
-
-
-
 # for numerical variables, summarize the number of analyses they have been reported in
-summary_indicator_frequencies <- dfshort %>%
+summary_indicator_frequencies <- continuous_dfshort %>%
   group_by(indicatorcategory) %>%
   filter(!is.na(`resistant_group p-value`)) %>%
   summarise(n=n())
 summary_indicator_frequencies
+
+# 2.2 CATEGORICAL VARIABLES
+# count categorical indicators reported
+length(unique(df_longer$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
+length(unique(df_longer$`Proportion Variable_description`))
