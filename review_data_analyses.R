@@ -3,7 +3,7 @@
 ###########################################
 
 # install/load packages
-pacman::p_load(readxl, writexl, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer)
+pacman::p_load(readxl, writexl, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm)
 
 #### 0. IMPORT/CLEAN DATA #### 
 df <- read_excel("20250830 WHO_Extracted-data_Consensed_review_457022_20250830231950.xlsx")
@@ -322,26 +322,27 @@ categorical_df <- categorical_df %>% filter(!is.na(`Number Variable_description`
 # regroup the categorical exposures of interest/indicators in `Proportion Variable_description` -> NEED TO BE FURTHER CLEANED - some labels might be added that are mistakenly added
 categorical_df <- categorical_df %>%  mutate(
     indicatorcategory = case_when( # replace by indicatorcategory when done
+      str_detect(`Proportion Variable_description`, regex("ICU|intensive care", ignore_case = TRUE)) ~ "Prior ICU stay",
+      str_detect(`Proportion Variable_description`, regex("Clinical severity - All-cause 30-day mortality|Overall in-hospital mortality", ignore_case = TRUE)) ~ "Patient outcomes", # is an outcome, so avoid that it's labelled 'severity' or 'prior hospi'
       str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|healthcare-associated|Hospital-acquired|Recent international healthcare exposure|nosocomial", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
       str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
       str_detect(`Proportion Variable_description`, regex("Hospital", ignore_case = TRUE)) |
-        str_detect(`Proportion Variable_description`, ">48h") ~ "Hospital-acquired",
+      str_detect(`Proportion Variable_description`, ">48h") ~ "Hospital-acquired",
       str_detect(`Proportion Variable_description`, regex("Community", ignore_case = TRUE)) ~ "Community-acquired",
       str_detect(`Proportion Variable_description`, regex("long-term care|long term care|long-term-care|nursing home|Long-term acute care facility residence", ignore_case = TRUE)) ~ "Long-term care facility",
       str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis", ignore_case = TRUE)) ~ "Specific primary infection site",
-      str_detect(`Proportion Variable_description`, regex("ICU|intensive care", ignore_case = TRUE)) ~ "Prior ICU stay",
       str_detect(`Proportion Variable_description`, regex("colonizat|Prior ESBL", ignore_case = TRUE)) ~ "Prior colonization or infection",
       str_detect(`Proportion Variable_description`, regex("Colonisation|Colonization|Previous .*infection|Previous .*isolate|History of .*infection", ignore_case = TRUE)) ~ "Prior colonization or infection",
-      str_detect(`Proportion Variable_description`, regex("Tracheal|Cannula|Aspiration|Nutrition|pacemaker|catheter|surgery|surgical proced|caesarian|intubat|foley|catheter|central line|ventilator|surgery|invasive|hemodialys|mechanical ventilat|central venous line|gastric tube|parenteral nutrit", ignore_case = TRUE)) ~ "Invasive procedures",
+      str_detect(`Proportion Variable_description`, regex("Thoracentesis|Tracheal|Cannula|Aspiration|Nutrition|pacemaker|catheter|surgery|surgical proced|caesarian|intubat|foley|catheter|central line|ventilator|surgery|invasive|hemodialys|mechanical ventilat|central venous line|gastric tube|parenteral nutrit", ignore_case = TRUE)) ~ "Invasive procedures",
       str_detect(`Proportion Variable_description`, regex("Device|Catheter|Intubation|Surgery|Operation|Bronchoscopy|Drain|Tube|Endoscopy|Tracheo|Puncture", ignore_case = TRUE)) ~ "Invasive procedures",
       str_detect(`Proportion Variable_description`, regex("leukocytes|lymphocytopenia|coagulation|low hemoglobin|low wbc|neutropenia|thrombocytopenia|Hypoproteinemia|monocyte|neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Low blood values",
+      str_detect(`Proportion Variable_description`, regex("Requirement of blood transfusion(s)|sepsis|shock|severe|clinical severity", ignore_case = TRUE)) ~ "Clinical severity",
       str_detect(`Proportion Variable_description`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
       str_detect(`Proportion Variable_description`, regex("burn", ignore_case = TRUE)) ~ "Burns",
       str_detect(`Proportion Variable_description`, regex("crp|procalcitonin|biomarker", ignore_case = TRUE)) ~ "Biomarker positive",
       str_detect(`Proportion Variable_description`, regex("diabetes|hypertension|copd|asthma", ignore_case = TRUE)) ~ "NCDs",
       str_detect(`Proportion Variable_description`, regex("solid organ tumor|comorbidity|cancer|renal|liver|hiv|malignancy|dementia|hemipleg|congestive heart failur|myocardial infarc|chronic neurological|vascular disease", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("Chronic|Underlying|Comorbid|Charlson|NCD|Kidney|Cardiac|Tumou?r|Neoplasia|Pulmonary|Rheumatic|Immunosuppress|Autoimmune|Malignant|Comorbid|Cancer", ignore_case = TRUE)) ~ "Comorbidities",
-      str_detect(`Proportion Variable_description`, regex("sepsis|shock|severe|clinical severity", ignore_case = TRUE)) ~ "Clinical severity",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn", ignore_case = TRUE)) ~ "Young age",
       str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus", ignore_case = TRUE)) ~ "Primary infection site",
@@ -383,6 +384,13 @@ catindicatorsother
 write_xlsx(catindicatorsother, "catindicatorsother.xlsx")
 
 # since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
+
+# check reference categories between studies, making sure the same are used between studies that are analysed together
+# check indicator categories and if a reference is specified
+ref <- categorical_df %>% group_by(indicatorcategory, `Proportion Variable_description`, Study_ID) %>% summarise(n=n()) # STILL NEED TO ADD REFERENCE FOR OTHER CATEGORICAL VARIABLES THAT ARE NOT YES VS NO
+# add a variable to indicate which value is used as the reference
+categorical_df$ref[categorical_df$indicatorcategory=="Sex"] <- "male" 
+categorical_df$ref[categorical_df$indicatorcategory=="Sex"&grepl("female",categorical_df$`Proportion Variable_description`, ignore.case = T)] <- "female" 
 
 # reformat number variables (now often containing non numerical characters)
 # is not a categorical variable
@@ -438,7 +446,7 @@ table(categorical_df$`Number Susceptible_comparator_group_value`, useNA = "alway
 check <- categorical_df %>% filter(is.na(categorical_df$`Number Susceptible_comparator_group_value`)) %>% select(Study_ID, 33:61)
 
 # calculate crude odds ratio based on reported numbers
-categorical_df$or <- (categorical_df$`Number Resistant_group_value`/categorical_df$Resistant_group_tot_nb)/(categorical_df$`Number Susceptible_comparator_group_value`/categorical_df$Susceptible_group_tot_nb)
+# categorical_df$or <- (categorical_df$`Number Resistant_group_value`/categorical_df$Resistant_group_tot_nb)/(categorical_df$`Number Susceptible_comparator_group_value`/categorical_df$Susceptible_group_tot_nb)
 a <- categorical_df$`Number Resistant_group_value`
 b <- categorical_df$Resistant_group_tot_nb - a
 c <- categorical_df$`Number Susceptible_comparator_group_value`
@@ -449,85 +457,14 @@ categorical_df$or <- (a * d) / (b * c)
 se_log_or <- sqrt(1/a + 1/b + 1/c + 1/d)
 categorical_df$ci_low  <- exp(log(categorical_df$or) - 1.96 * se_log_or)
 categorical_df$ci_high <- exp(log(categorical_df$or) + 1.96 * se_log_or)
+
+# inverse if sex is "female", to make sure "male" is compared against "female" as the reference category (most frequent comparison)
+categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+
+# combine lower an upper CI limits in a single variable
 categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categorical_df$ci_high) # combining confidence intervals
-
-table(categorical_df$or)
-# visualize all odds ratios reported by studies on a plot, excluding those with a missing value
-# first remove extreme values of values with a 
-categorical_df_or <- categorical_df %>% filter(!is.na(or), !is.na(ci_low), !is.na(ci_high), or > 0, ci_low > 0, ci_high > 0, or>0.1 & or <20)
-scale_y_log10(labels = scales::label_number())
-ggplot(categorical_df_or, aes(x = reorder(Study_ID, or), y = or)) +
-  geom_point(size = 3, color = "#0072B2") +
-  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, color = "#0072B2") +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
-  coord_flip() +
-  scale_y_log10(
-    labels = scales::label_number(accuracy = 0.1),  # show decimals, not exponents, even if scale is log transformed
-    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
-  labs(
-    x = "",
-    y = "Odds Ratio (log scale)",
-    title = "Odds Ratios with 95% Confidence Intervals") +
-  theme_minimal(base_size = 13) +
-  facet_grid(rows = vars(indicatorcategory), scales = "free_y", space = "free_y", switch = "x", strip.position = "top")
-
-# group by indicatorgategory
-# the y positions where to draw separator lines and group labels
-categorical_df_or <- categorical_df_or %>%  mutate(ypos = as.numeric(Study_ID))
-table(categorical_df_or$ypos)
-group_positions <- categorical_df_or %>%
-  group_by(indicatorcategory) %>%
-  summarise(
-    start = min(ypos),
-    end = max(ypos),
-    midpoint = mean(ypos)
-  )
-
-ggplot(categorical_df_or, aes(x = or, y = ypos)) +
-  geom_point(size = 3, color = "#0072B2") +
-  geom_errorbarh(aes(xmin = ci_low, xmax = ci_high), height = 0.2, color = "#0072B2") +
-  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
-  scale_x_log10(
-    labels = scales::label_number(accuracy = 0.1),
-    breaks = c(0.1, 0.25, 0.5, 1, 2, 4, 10)
-  ) +
-  scale_y_continuous(
-    breaks = categorical_df_or$ypos,
-    labels = categorical_df_or$Study_ID,
-    expand = expansion(mult = c(0.02, 0.08))
-  ) +
-  coord_cartesian(clip = "off") +
-  theme_minimal(base_size = 13) +
-  theme(
-    axis.title.y = element_blank(),
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    axis.text.y = element_text(size = 10)
-  ) +
-  labs(
-    x = "Odds Ratio (log scale)",
-    title = "Odds Ratios by Indicator category"
-  ) +
-  # --- group separators ---
-  geom_hline(
-    data = group_positions[-nrow(group_positions), ],
-    aes(yintercept = end + 0.5),
-    color = "gray80",
-    linewidth = 0.6,
-    inherit.aes = FALSE
-  ) +
-  # --- group labels ---
-  geom_text(
-    data = group_positions,
-    aes(x = max(categorical_df_or$ci_high, na.rm = TRUE) * 1.5,
-        y = midpoint,
-        label = indicatorcategory),
-    hjust = 0,
-    fontface = "bold",
-    size = 4,
-    inherit.aes = FALSE
-  )
-
 
 #### 1. DESCRIPTION OF STUDIES ####
 # 1.1 create a map with the frequency of studies by country
@@ -743,3 +680,58 @@ summary_indicator_frequencies
 # count categorical indicators reported
 length(unique(df_longer$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
 length(unique(df_longer$`Proportion Variable_description`))
+# summarize the reported indicators 
+categorical_summary <- categorical_df %>%
+  group_by(indicatorcategory, amr) %>%
+  summarise(
+    n_studies = n_distinct(Study_ID),                           
+    sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
+    sum_susceptible_tot = sum(Susceptible_group_tot_nb, na.rm = TRUE), 
+    sum_resistant_value = sum(`Number Resistant_group_value`, na.rm = TRUE), 
+    sum_susceptible_value = sum(`Number Susceptible_comparator_group_value`, na.rm = TRUE), 
+    median_or = median(or, na.rm = TRUE),                    
+    q25_or = quantile(or, 0.25, na.rm = TRUE),               # 25th percentile
+    q75_or = quantile(or, 0.75, na.rm = TRUE)                # 75th percentile
+  ) %>%
+  ungroup()
+categorical_summary
+# visualize all odds ratios reported by studies on a plot, excluding those with a missing value
+# first remove extreme values of values with a 
+categorical_df_or <- categorical_df %>% filter(!is.na(or), !is.na(ci_low), !is.na(ci_high), or > 0, ci_low > 0, ci_high > 0, or>0.1 & or <20)
+scale_y_log10(labels = scales::label_number())
+orplot <- ggplot(categorical_df_or, aes(x = reorder(Study_ID, or), y = or, color = amr)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_log10(
+    labels = scales::label_number(accuracy = 0.1),  # show decimals, not exponents, even if scale is log transformed
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
+  labs(
+    x = "",
+    y = "Odds Ratio (log scale)",
+    title = "Odds Ratios with 95% Confidence Intervals") +
+  theme_minimal(base_size = 13) +
+  facet_grid(rows = vars(indicatorcategory), scales = "free_y", space = "free_y") +
+  theme(strip.text.y.left = element_text(angle = 90, hjust = 1, face = "bold"))
+orplot
+ggsave(orplot, filename = "OR_summary.jpeg",  width = 12, height = 49, dpi = 250) 
+
+# subset only studies looking at sex
+categorical_df_or_sex <- categorical_df_or %>% filter(indicatorcategory=="Sex")
+ggplot(categorical_df_or_sex, aes(x = reorder(Study_ID, or), y = or, color = as.factor(amr))) +
+  # geom_point(size = 3) +
+  geom_beeswarm(size = 3) +  # spreads points if they are overlapping
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_log10(
+    labels = scales::label_number(accuracy = 0.1),  # show decimals, not exponents, even if scale is log transformed
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
+  scale_color_discrete(name = "AMR") +
+  labs(
+    x = "",
+    y = "Odds Ratio (log scale)",
+    title = "Odds Ratios with 95% Confidence Intervals",
+    color = "AMR") +
+  theme_minimal(base_size = 13) 
