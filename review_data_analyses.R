@@ -382,29 +382,151 @@ catindicatorsother <- df_longer %>%
 catindicatorsother
 write_xlsx(catindicatorsother, "catindicatorsother.xlsx")
 
-# STILL TO DO: LINK THE UNIVAR PART TO THE PREVIOUS DESCRIPTIVE PARTS
-# recalculate an or based on the reported numbers (except when the exposure is numeric - for those we will need to use the p value since SD or SE are not systematically reported)
-df3$n_exposed_resistant <- df3$`Number Resistant_group_value`
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="834 (316-2506)"] <- "834"
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="834 (316-2506)"] <- "834"
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="974 (394-1779)"] <- "974"
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="98/101"] <- "98"
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="37/33"] <- "37"
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="39.0 (27.6-55.8)"] <- "65" # if 39% exposed out of 166 (n resistant) -> 65 cases exposed
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="27.3 (15.4-48.1)"] <- "41" # if 27% exposed out of 152 (n susceptible) -> 41 cases exposed
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="2/101"] <- NA # checked but unclear where the susceptible number comes from
-df3$`Number Susceptible_comparator_group_value`[df3$`Number Susceptible_comparator_group_value`=="19419"] <- NA # checked, linked to the previous line
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="2472 (986-4914)"] <- "2472" 
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="1075 (107-2397)"] <- "1075" 
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="114.65"] <- NA
-df3$n_exposed_resistant[df3$`Number Resistant_group_value`=="116.2"] <- NA 
+# since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
 
-check <- df3 %>% filter(df3$`Number Resistant_group_value`=="39.0 (27.6-55.8)")
+# reformat number variables (now often containing non numerical characters)
+# is not a categorical variable
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="39.0 (27.6-55.8)") # mean economic cost in usd
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="834 (316-2506)") # mean economic cost in usd
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="974 (394-1779)") # mean economic cost in usd
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="2472 (986-4914)") # mean economic cost in usd
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="1075 (107-2397)") # mean economic cost in usd
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="114.65") # cerebrospinal fluid (CSF) (chlorine (CL)) (mmol/L) - MEDIAN
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="116.2") # cerebrospinal fluid (CSF) (chlorine (CL)) (mmol/L) - MEDIAN
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="2.0299999999999998") # cerebrospinal fluid (CSF) (Glucose (GLU)) (mmol/L) - MEDIAN
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="0.26") # PCT value
+categorical_df <- categorical_df %>% filter(`Number Resistant_group_value`!="0/101") # ANC (neutrophils/ul)- >500 values don't make sense; the count in the comparator group is 19541
 
-df_longer %>% mutate(`Number Resistant_group_value` = str_extract(`Number Resistant_group_value`, "^[0-9]+"))
-table(df_longer$`Number Resistant_group_value`)
-df3$or <- (df3$`Number Resistant_group_value`/ )/ (df3$`Number Susceptible_comparator_group_value`/)
+# correct values with characters in, after checking each 
+categorical_df$Resistant_group_tot_nb[categorical_df$`Number Resistant_group_value`=="98/101"] <- "101" # different denominator for this specific test done
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="98/101"] <- "98"
+categorical_df$`Number Variable_description`[categorical_df$`Number Resistant_group_value`=="37/33"] <- "inborn (vs. outborn)" # the variable description distinguished inborn vs outborn
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="37/33"] <- "37" # the variable description distinguished inborn vs outborn
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="210/96"] <- "210" # the variable description distinguished inborn vs outborn
+categorical_df$Resistant_group_tot_nb[categorical_df$`Number Resistant_group_value`=="2/101"] <- "101" # different denominator for this specific test done
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="2/101"] <- "2"
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="19419"] <- "5" # probably a typo. deducted the number based on the proportion reported (0.057*89)
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="not  mentioned"&categorical_df$`Proportion Resistant_group_value`=="19.2"] <- "59"
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="not  mentioned"&categorical_df$`Proportion Resistant_group_value`=="38.6"] <- "119"
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="not  mentioned"&categorical_df$`Proportion Resistant_group_value`=="56.2"] <- "174"
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="not  mentioned"&categorical_df$`Proportion Susceptible_comparator_group_value`=="7.4"] <- "67" # deducted the number based on the proportion reported 
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="not  mentioned"&categorical_df$`Proportion Susceptible_comparator_group_value`=="22.8"] <- "207" # deducted the number based on the proportion reported 
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="not  mentioned"&categorical_df$`Proportion Susceptible_comparator_group_value`=="32.6"] <- "296" # deducted the number based on the proportion reported 
+categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_group_value`=="not mentioned"&categorical_df$`Proportion Resistant_group_value`=="21.59"] <- "19"
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="not mentioned"&categorical_df$`Proportion Susceptible_comparator_group_value`=="11.76"] <- "16" # deducted the number based on the proportion reported 
+categorical_df$Resistant_group_tot_nb[categorical_df$Resistant_group_tot_nb=="91.77"&categorical_df$Study_ID=="#4740"] <- "87" # corrected based on check in the full text
+categorical_df$Susceptible_group_tot_nb[categorical_df$Susceptible_group_tot_nb=="314.44"&categorical_df$Study_ID=="#4740"] <- "321" # corrected based on check in the full text
 
+categorical_df$Resistant_group_tot_nb[is.na(categorical_df$Resistant_group_tot_nb)&categorical_df$Study_ID=="#3295"] <- "286" # looked up in the extraction table, under col 8 (Note)
+categorical_df$Susceptible_group_tot_nb[is.na(categorical_df$Susceptible_group_tot_nb)&categorical_df$Study_ID=="#3295"] <- "409" # looked up in the extraction table, under col 8 (Note)
+categorical_df$Resistant_group_tot_nb[is.na(categorical_df$Resistant_group_tot_nb)&categorical_df$Study_ID=="#2039"] <- "13" # looked up in the extraction table, entered by one extractor but not the second, therefore missing
+categorical_df$Susceptible_group_tot_nb[is.na(categorical_df$Susceptible_group_tot_nb)&categorical_df$Study_ID=="#1684"] <- "543" # looked up in the extraction table, different values between extractors, and double checked in full paper
+
+# also #4688 and #1412 have no `Number Susceptible_comparator_group_value`, because they were not reported in the article -> exclude from the analysis of measures of association?
+
+# make numeric
+categorical_df$`Number Resistant_group_value` <- as.numeric(categorical_df$`Number Resistant_group_value`)
+categorical_df$`Number Susceptible_comparator_group_value` <- as.numeric(categorical_df$`Number Susceptible_comparator_group_value`)
+categorical_df$Resistant_group_tot_nb <- as.numeric(categorical_df$Resistant_group_tot_nb)
+categorical_df$Susceptible_group_tot_nb <- as.numeric(categorical_df$Susceptible_group_tot_nb)
+
+table(categorical_df$Resistant_group_tot_nb, useNA = "always")
+table(categorical_df$Susceptible_group_tot_nb, useNA = "always")
+table(categorical_df$`Number Resistant_group_value`, useNA = "always")
+table(categorical_df$`Number Susceptible_comparator_group_value`, useNA = "always")
+
+check <- categorical_df %>% filter(is.na(categorical_df$`Number Susceptible_comparator_group_value`)) %>% select(Study_ID, 33:61)
+
+# calculate crude odds ratio based on reported numbers
+categorical_df$or <- (categorical_df$`Number Resistant_group_value`/categorical_df$Resistant_group_tot_nb)/(categorical_df$`Number Susceptible_comparator_group_value`/categorical_df$Susceptible_group_tot_nb)
+a <- categorical_df$`Number Resistant_group_value`
+b <- categorical_df$Resistant_group_tot_nb - a
+c <- categorical_df$`Number Susceptible_comparator_group_value`
+d <- categorical_df$Susceptible_group_tot_nb - c
+
+# odds ratio with 95% CI
+categorical_df$or <- (a * d) / (b * c)
+se_log_or <- sqrt(1/a + 1/b + 1/c + 1/d)
+categorical_df$ci_low  <- exp(log(categorical_df$or) - 1.96 * se_log_or)
+categorical_df$ci_high <- exp(log(categorical_df$or) + 1.96 * se_log_or)
+categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categorical_df$ci_high) # combining confidence intervals
+
+table(categorical_df$or)
+# visualize all odds ratios reported by studies on a plot, excluding those with a missing value
+# first remove extreme values of values with a 
+categorical_df_or <- categorical_df %>% filter(!is.na(or), !is.na(ci_low), !is.na(ci_high), or > 0, ci_low > 0, ci_high > 0, or>0.1 & or <20)
+scale_y_log10(labels = scales::label_number())
+ggplot(categorical_df_or, aes(x = reorder(Study_ID, or), y = or)) +
+  geom_point(size = 3, color = "#0072B2") +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, color = "#0072B2") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  coord_flip() +
+  scale_y_log10(
+    labels = scales::label_number(accuracy = 0.1),  # show decimals, not exponents, even if scale is log transformed
+    breaks = c(0.1, 0.2, 0.5, 1, 2, 5, 10)) +
+  labs(
+    x = "",
+    y = "Odds Ratio (log scale)",
+    title = "Odds Ratios with 95% Confidence Intervals") +
+  theme_minimal(base_size = 13) +
+  facet_grid(rows = vars(indicatorcategory), scales = "free_y", space = "free_y", switch = "x", strip.position = "top")
+
+# group by indicatorgategory
+# the y positions where to draw separator lines and group labels
+categorical_df_or <- categorical_df_or %>%  mutate(ypos = as.numeric(Study_ID))
+table(categorical_df_or$ypos)
+group_positions <- categorical_df_or %>%
+  group_by(indicatorcategory) %>%
+  summarise(
+    start = min(ypos),
+    end = max(ypos),
+    midpoint = mean(ypos)
+  )
+
+ggplot(categorical_df_or, aes(x = or, y = ypos)) +
+  geom_point(size = 3, color = "#0072B2") +
+  geom_errorbarh(aes(xmin = ci_low, xmax = ci_high), height = 0.2, color = "#0072B2") +
+  geom_vline(xintercept = 1, linetype = "dashed", color = "gray40") +
+  scale_x_log10(
+    labels = scales::label_number(accuracy = 0.1),
+    breaks = c(0.1, 0.25, 0.5, 1, 2, 4, 10)
+  ) +
+  scale_y_continuous(
+    breaks = categorical_df_or$ypos,
+    labels = categorical_df_or$Study_ID,
+    expand = expansion(mult = c(0.02, 0.08))
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.title.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_text(size = 10)
+  ) +
+  labs(
+    x = "Odds Ratio (log scale)",
+    title = "Odds Ratios by Indicator category"
+  ) +
+  # --- group separators ---
+  geom_hline(
+    data = group_positions[-nrow(group_positions), ],
+    aes(yintercept = end + 0.5),
+    color = "gray80",
+    linewidth = 0.6,
+    inherit.aes = FALSE
+  ) +
+  # --- group labels ---
+  geom_text(
+    data = group_positions,
+    aes(x = max(categorical_df_or$ci_high, na.rm = TRUE) * 1.5,
+        y = midpoint,
+        label = indicatorcategory),
+    hjust = 0,
+    fontface = "bold",
+    size = 4,
+    inherit.aes = FALSE
+  )
 
 
 #### 1. DESCRIPTION OF STUDIES ####
