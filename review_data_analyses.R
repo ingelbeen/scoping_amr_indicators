@@ -18,11 +18,95 @@ df <- df %>%  select(where(~ any(!is.na(.) & . != "")))
 names(df) <- gsub("(?<=total)_[0-9]+", "", names(df), perl = TRUE)
 names(df) <- gsub("resistant_20 ", "resistant_group ", names(df))
 
-# TO CHECK: should analyses which analyze another outcome than AMR (mortality, cost) be reported?
+# I here initially excluded those analyses that did not report AMR as an outcome measure, but that variable Outcome_measure_repoted might not be entered correctly, with some studies having cost or mortality as primary outcome but still reporting on an analysis with AMR as outcome
 table(df$Outcome_measure_repoted)
 
-# excluding analyses that do not analyze AMR as an outcome measure
-df <- df %>% filter(str_detect(Outcome_measure_repoted, regex("AMR \\(ie development/ incidence/ emergence / change in AMR\\)", ignore_case = TRUE)))
+# clean variables describing studies in df
+# publication year
+table(df$Publication_year, useNA = "always") # is ok
+
+# a var 'analysisdesign' based on the var Study design
+df$analysisdesign_simplified <- ifelse(grepl("control", df$Study_design, ignore.case = TRUE),"Case-control study", # nested case control within a cohort is considered case-control, since the analysis is
+                                    ifelse(grepl("cohort|case-0series|surveillance", df$Study_design, ignore.case = TRUE), "Cohort study",
+                                           ifelse(grepl("cross[ -]?sectional", df$Study_design, ignore.case = TRUE),"Cross-sectional study", "Other/not specified")))
+table(df$Study_design, df$analysisdesign_simplified, useNA = "always")
+
+# a var studypop, extracting age specific populations from the var 'Population_admitting_ward'
+df$studypop <- dplyr::case_when(
+  grepl("adult", df$Population_admitting_ward, ignore.case = TRUE) &
+    grepl("pediatric|paediatric", df$Population_admitting_ward, ignore.case = TRUE) &
+    grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE) ~ "All ages or not specified",
+  grepl("adult", df$Population_admitting_ward, ignore.case = TRUE) &
+    grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE) ~ "All ages or not specified",  
+  grepl("adult", df$Population_admitting_ward, ignore.case = TRUE) &
+    grepl("pediatric|paediatric", df$Population_admitting_ward, ignore.case = TRUE) ~ "Adults & pediatrics",
+  grepl("pediatric|paediatric", df$Population_admitting_ward, ignore.case = TRUE) &
+    grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE) ~ "Pediatrics incl. neonates",
+  grepl("adult", df$Population_admitting_ward, ignore.case = TRUE) ~ "Adults",
+  grepl("pediatric|paediatric", df$Population_admitting_ward, ignore.case = TRUE) ~ "Pediatrics",
+  grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE) ~ "Neonates",
+    TRUE ~ "All ages or not specified")
+table(df$studypop, useNA = "always")
+table(df$Population_admitting_ward[grepl("burn", df$Population_admitting_ward, ignore.case = T)])
+# study countries
+df <- df %>% mutate(Study_country = str_remove_all(Study_country, "Other:\\s*"))
+df <- df %>% mutate(Study_country = str_replace_all(Study_country, c(
+    "Brasil" = "Brazil",
+    "UK" = "United Kingdom",
+    "South-Korea" = "South Korea",
+    "South-Africa" = "South Africa",
+    "OPT" = "Palestine")))
+df$Study_country[df$Study_country=="Korea"] <- "South Korea"
+table(df$Study_country)
+# assign world bank income groups to the countries
+income_lookup <- c(
+  "Argentina" = "Upper middle income",
+  "Australia" = "High income",
+  "Australia; New Zealand" = "High income",
+  "Bangladesh" = "Lower middle income",
+  "Brazil" = "Upper middle income",
+  "Canada" = "High income",
+  "China" = "Upper middle income",
+  "Colombia" = "Upper middle income",
+  "Colombia, Argentina, Ecuador, Guatemala, Mexico, Peru, Venezuela" = "Upper middle income",
+  "Egypt" = "Lower middle income",
+  "Europe" = "High income",
+  "France" = "High income",
+  "French Guiana" = "Upper middle income",
+  "Germany" = "High income",
+  "Greece" = "High income",
+  "India" = "Lower middle income",
+  "Indonesia" = "Lower middle income",
+  "Iran" = "Upper middle income",
+  "Israel" = "High income",
+  "Italy" = "High income",
+  "Italy, Spain, Germany, Croatia, Israel" = "High income",
+  "Japan" = "High income",
+  "Lebanon" = "Upper middle income",
+  "Madagascar" = "Low income",
+  "Malawi" = "Low income",
+  "Mexico" = "Upper middle income",
+  "Netherlands" = "High income",
+  "Pakistan" = "Lower middle income",
+  "Palestine" = "Lower middle income",
+  "Peru" = "Upper middle income",
+  "Scotland" = "High income",
+  "Senegal" = "Low income",
+  "Serbia" = "Upper middle income",
+  "Singapore" = "High income",
+  "South Africa" = "Upper middle income",
+  "South Korea" = "High income",
+  "Spain" = "High income",
+  "Sweden" = "High income",
+  "Switzerland" = "High income",
+  "Taiwan" = "High income",
+  "Tanzania" = "Low income",
+  "Thailand" = "Upper middle income",
+  "Turkey" = "Upper middle income",
+  "United Kingdom; 12 countries: Spain (n = 14 centers), Turkey (n = 4), Brazil (n = 3), Italy (n = 3), Argentina (n = 2), Germany (n = 2), Chile (n = 1), Colombia (n = 1), Lebanon (n = 1), Slovakia (n = 1), Switzerland (n = 1), and the United Kingdom (n = 1" = "Multiple",
+  "United States" = "High income",
+  "24 countries from Europe (Turkey, Portugal, Italy, Slovak Republic, Serbia, France, Romania, Cyprus, Bosnia and Herzegovina, Kosovo, North Macedonia, Bulgaria, Belgium, Hungary), Middle East and North Africa (Egypt, Lebanon, Oman, Iran, Palestine), South Asia (Bangladesh, Pakistan, India), Latin America and the Caribbean (Puerto Rico), and East Asia (Thailand)" = "Multiple")
+df$incomegroup <- income_lookup[df$Study_country]
 
 # we need three databases for the planned analyses: 
 # 1) one with one row/observation per study, to summarize study characteristics -> df
@@ -57,13 +141,16 @@ df_long <- df_long %>%
 # write.table(resist_models, "resist_models.txt")
 
 df_long <- df_long %>%  mutate(amr = case_when(
-      grepl("MRSA", Resistant_grp_definition, ignore.case = TRUE) ~ "methicillin resistance",
+      (grepl("MRSA", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("ESBL|CRE|vancom|MDR", Resistant_grp_definition, ignore.case = TRUE)==F) ~ "methicillin resistance",
+      (grepl("oxacillin|methicillin", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("linezolid", Resistant_grp_definition, ignore.case = TRUE)==T) ~ "methicillin and linezolid resistance",
+      (grepl("oxacillin|methicillin", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("linezolid", Resistant_grp_definition, ignore.case = TRUE)==F) ~ "methicillin resistance",
       grepl("ESBL", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
       grepl("VRE", Resistant_grp_definition, ignore.case = TRUE) ~ "vancomycin resistance",
       grepl("\\bMDR\\b", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
       grepl("(MRO)", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
       grepl("MDRAB", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
       grepl("MDRO", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin, carbapenem or methicillin resistance (depending on isolated pathogen)",
+      grepl("Carba", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("Resistance (+)", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin, carbapenem or methicillin resistance (depending on isolated pathogen)",
       grepl("XDR", Resistant_grp_definition, ignore.case = TRUE) ~ "XDR (not defined)",
       grepl("3GC", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
@@ -80,23 +167,28 @@ df_long <- df_long %>%  mutate(amr = case_when(
       grepl("trimethoprim|sulfamethoxazole|co-trimoxazole", Resistant_grp_definition, ignore.case = TRUE) ~ "TMP/SMX resistance",
       grepl("nitrofurantoin", Resistant_grp_definition, ignore.case = TRUE) ~ "nitrofurantoin resistance",
       grepl("piperacillin|tazobactam", Resistant_grp_definition, ignore.case = TRUE) ~ "pip/tazo resistance",
-      grepl("oxacillin|penicillin|linezolid", Resistant_grp_definition, ignore.case = TRUE) ~ "methicillin and linezolid resistance",
       grepl("CR", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
-      grepl("Carba", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("CPE", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("Meropenem-nonsus", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("KPC", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
-      grepl("reduced susceptibility to cefuroxime and genta", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR to empiric treatment",
+      grepl("reduced susceptibility to cefuroxime and genta", Resistant_grp_definition, ignore.case = TRUE) ~ "cefuroxime + gentamycin resistance",
       grepl("CASR", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem + ampicillin/sulbactam resistance",
-      grepl("resistant group", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR to empiric treatment",
-      grepl("Ampicillin and gentamicin", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR to empiric treatment",
+      grepl("resistant group", Resistant_grp_definition, ignore.case = TRUE) ~ "?",
+      grepl("Ampicillin and gentamicin", Resistant_grp_definition, ignore.case = TRUE) ~ "ampicillin + gentamycin resistance",
       grepl("SNS", Resistant_grp_definition, ignore.case = TRUE) ~ "sulbactam non susceptible",
-      grepl("LNZ", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid susceptible",
-      grepl("imipenem-res", Resistant_grp_definition, ignore.case = TRUE) ~ "imipenem resistance",
+      grepl("LNZ", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible",
+      grepl("imipenem-res", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("HLRG", Resistant_grp_definition, ignore.case = TRUE) ~ "high-level gentamicin resistance",
       grepl("Drug resistant gram posit", Resistant_grp_definition, ignore.case = TRUE) ~ "not specified resistance",
       TRUE ~ Resistant_grp_definition))   # keep original for unique/rare categories
-table(df_long$amr)
+amrgroups <- df_long %>% group_by(amr, Resistant_grp_definition) %>% summarise(n=n())
+write_xlsx(amrgroups, "amrgroups.xlsx")
+
+# summary of those with non specific resistance profiles reported
+check_amr <- df_long %>% filter(grepl("\\bMDR\\b|(MRO)|MDRAB|MDRO|XDR|resistant group|Resistance (+)|Drug resistant gram positive", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
+write_xlsx(check_amr, "check_amr.xlsx")
+df_long %>% filter(grepl("oxacillin|methicillin|linezolid", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
+df_long %>% filter(grepl("nitrofur", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
 
 # check columns
 print(colnames(df_long), max = 1900)
@@ -298,7 +390,6 @@ check <- df_long %>% group_by(`Proportion_1 Variable_description`, `Number_1 Var
 
 categorical_df <- df_long %>% 
   select(1:32, 394:965, amr, Model, Resistant_group_tot_nb, Susceptible_group_tot_nb)
-check <- categorical_df %>% group_by(`Number_1 Resistant_group_definition`, Resistant_grp_definition, amr, Susceptible_group_definition) %>% summarise(n=n())
 
 categorical_df <- categorical_df %>%
   rename_with(~ str_replace(.x, "^(Number|Proportion|95%CI)_(\\d+) (.*)$", "\\1 \\3_\\2")) # put the sequential numbers at the end
@@ -324,17 +415,19 @@ categorical_df <- categorical_df %>%  mutate(
     indicatorcategory = case_when( # replace by indicatorcategory when done
       str_detect(`Proportion Variable_description`, regex("ICU|intensive care", ignore_case = TRUE)) ~ "Prior ICU stay",
       str_detect(`Proportion Variable_description`, regex("Clinical severity - All-cause 30-day mortality|Overall in-hospital mortality", ignore_case = TRUE)) ~ "Patient outcomes", # is an outcome, so avoid that it's labelled 'severity' or 'prior hospi'
-      str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|healthcare-associated|Hospital-acquired|Recent international healthcare exposure|nosocomial", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
-      str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
-      str_detect(`Proportion Variable_description`, regex("Hospital", ignore_case = TRUE)) |
-      str_detect(`Proportion Variable_description`, ">48h") ~ "Hospital-acquired",
-      str_detect(`Proportion Variable_description`, regex("Community", ignore_case = TRUE)) ~ "Community-acquired",
+# hospital-acquired vs healthcare associated are tricky. sometimes (primary) healthcare exposure prior to hospitalisation is reported, which is quite different and needs its own category
+      str_detect(`Proportion Variable_description`, regex("Route of infection - Non nosocomial healthcare associated|Source of infection-Healthcare|Healthcare associated|Healthcare-associated\r\ninfections", ignore_case = TRUE)) ~ "Healthcare associated, other than hospital-acquired or non specified if hospital",
+      `Proportion Variable_description` %in% c("Healthcare-associated infection", "Healthcare-associated", "Health-care associated BSI", "Community/health care associated - Health care associated|Background parameters - Health care-associated acquisition of pathogen|Acquisition of bacteraemia-Healthcare-associated|Acquisition and onset setting -  healthcare-associated community-onset|Acquisition-Nosocomial and healthcare acquired") ~ "Healthcare associated, other than hospital-acquired or non specified if hospital",
+      str_detect(`Proportion Variable_description`, regex("Community|Route of infection - Non-health care associated|Length of hospital stay before positive blood culture - <48h|Community or ambulatory health care|Hospitalization never or not within 1 yr", ignore_case = TRUE)) ~ "Community-acquired",
+      str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|Hospital-acquired|Recent international healthcare exposure|nosocomial", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
+      str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital|Currently resident in an intermediate level health care facility", ignore_case = TRUE)) ~ "Prior hospitalisation",
+      str_detect(`Proportion Variable_description`, regex("Hospital|Prior healthcare abroad|Healthcare-asscociated >=48h", ignore_case = TRUE)) ~ "Prior hospitalisation",
       str_detect(`Proportion Variable_description`, regex("long-term care|long term care|long-term-care|nursing home|Long-term acute care facility residence", ignore_case = TRUE)) ~ "Long-term care facility",
-      str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis", ignore_case = TRUE)) ~ "Specific primary infection site",
+      str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("colonizat|Prior ESBL", ignore_case = TRUE)) ~ "Prior colonization or infection",
-      str_detect(`Proportion Variable_description`, regex("Colonisation|Colonization|Previous .*infection|Previous .*isolate|History of .*infection", ignore_case = TRUE)) ~ "Prior colonization or infection",
+      str_detect(`Proportion Variable_description`, regex("Colonisation|Colonization|Previous .*infection|Previous .*isolate|History of .*infection|infection or\r\ncolonization of", ignore_case = TRUE)) ~ "Prior colonization or infection",
       str_detect(`Proportion Variable_description`, regex("Thoracentesis|Tracheal|Cannula|Aspiration|Nutrition|pacemaker|catheter|surgery|surgical proced|caesarian|intubat|foley|catheter|central line|ventilator|surgery|invasive|hemodialys|mechanical ventilat|central venous line|gastric tube|parenteral nutrit", ignore_case = TRUE)) ~ "Invasive procedures",
-      str_detect(`Proportion Variable_description`, regex("Device|Catheter|Intubation|Surgery|Operation|Bronchoscopy|Drain|Tube|Endoscopy|Tracheo|Puncture", ignore_case = TRUE)) ~ "Invasive procedures",
+      str_detect(`Proportion Variable_description`, regex("Device|Catheter|Intubation|Surgery|Operation|Bronchoscopy|Drain|Tube|Endoscopy|Tracheo|Puncture|Previous surgery ", ignore_case = TRUE)) ~ "Invasive procedures",
       str_detect(`Proportion Variable_description`, regex("leukocytes|lymphocytopenia|coagulation|low hemoglobin|low wbc|neutropenia|thrombocytopenia|Hypoproteinemia|monocyte|neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Low blood values",
       str_detect(`Proportion Variable_description`, regex("Requirement of blood transfusion(s)|sepsis|shock|severe|clinical severity", ignore_case = TRUE)) ~ "Clinical severity",
       str_detect(`Proportion Variable_description`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
@@ -345,7 +438,8 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Chronic|Underlying|Comorbid|Charlson|NCD|Kidney|Cardiac|Tumou?r|Neoplasia|Pulmonary|Rheumatic|Immunosuppress|Autoimmune|Malignant|Comorbid|Cancer", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn", ignore_case = TRUE)) ~ "Young age",
-      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus", ignore_case = TRUE)) ~ "Primary infection site",
+      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus", ignore_case = TRUE)) ~ "Primary/specific infection site",
+      str_detect(`Proportion Variable_description`, regex("Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("resistant|susceptible|intermediate|isolated|Resistance to | resistance", ignore_case = TRUE)) ~ "Resistance profile",
       str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
       str_detect(`Proportion Variable_description`, regex("Antibiotic|Antimicrobial|therapy|Previous .*therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
@@ -362,7 +456,6 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("SOFA|APACHE|qSOFA|Severity|ICU|Critical|Fatal|Coma scale|pSOFA", ignore_case = TRUE)) ~ "Clinical severity",
       str_detect(`Proportion Variable_description`, regex("Fever|Respiratory|Pleural|Manifestations|Clinical characteristics", ignore_case = TRUE)) ~ "Clinical manifestations",
       str_detect(`Proportion Variable_description`, regex("Region|Residence|Insurance|Income", ignore_case = TRUE)) ~ "Geography",
-      str_detect(`Proportion Variable_description`, regex("Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary infection site",
       TRUE ~ "Other"
     ))
 table(categorical_df$indicatorcategory)
@@ -370,18 +463,10 @@ table(categorical_df$indicatorcategory)
 # display all categorical indicators
 catindicators <- categorical_df %>%
   filter(!is.na(`Proportion Variable_description`)) %>%
-  select(`Proportion Variable_description`, indicatorcategory, `resistant_group notes`)  %>%
+  select(`Proportion Variable_description`, indicatorcategory)  %>%
   distinct()
 catindicators
 write_xlsx(catindicators, "catindicators.xlsx")
-
-# only those labelled as "Other" -> none left
-catindicatorsother <- df_longer %>%
-  filter(!is.na(`Proportion Variable_description`), indicatorcategory=="Other") %>%
-  select(`Proportion Variable_description`, `resistant_group notes`)  %>%
-  distinct()
-catindicatorsother
-write_xlsx(catindicatorsother, "catindicatorsother.xlsx")
 
 # since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
 
@@ -445,6 +530,17 @@ table(categorical_df$`Number Susceptible_comparator_group_value`, useNA = "alway
 
 check <- categorical_df %>% filter(is.na(categorical_df$`Number Susceptible_comparator_group_value`)) %>% select(Study_ID, 33:61)
 
+# make sure the same reference is used when comparing associations
+# to make sure "male" is compared against "female" as the reference category (most frequent comparison):
+# if sex is "female", replace the number of female resistant by the number of male resistance and the n female susceptible by male
+categorical_df$`Number Resistant_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- categorical_df$Resistant_group_tot_nb[categorical_df$ref=="female"&!is.na(categorical_df$ref)] - categorical_df$`Number Resistant_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- categorical_df$Susceptible_group_tot_nb[categorical_df$ref=="female"&!is.na(categorical_df$ref)] - categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+categorical_df$indicatorcategory[categorical_df$indicatorcategory=="Sex"] <- "Male sex"
+
+# 1/categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)] # instead of inversing the OR, now the counts are recalculated in the rows above
+# categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+# categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
+
 # calculate crude odds ratio based on reported numbers
 # categorical_df$or <- (categorical_df$`Number Resistant_group_value`/categorical_df$Resistant_group_tot_nb)/(categorical_df$`Number Susceptible_comparator_group_value`/categorical_df$Susceptible_group_tot_nb)
 a <- categorical_df$`Number Resistant_group_value`
@@ -458,28 +554,29 @@ se_log_or <- sqrt(1/a + 1/b + 1/c + 1/d)
 categorical_df$ci_low  <- exp(log(categorical_df$or) - 1.96 * se_log_or)
 categorical_df$ci_high <- exp(log(categorical_df$or) + 1.96 * se_log_or)
 
-# inverse if sex is "female", to make sure "male" is compared against "female" as the reference category (most frequent comparison)
-categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
-categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
-categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_high[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
-
 # combine lower an upper CI limits in a single variable
 categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categorical_df$ci_high) # combining confidence intervals
 
 #### 1. DESCRIPTION OF STUDIES ####
-# 1.1 create a map with the frequency of studies by country
+# 1.1 count of studies & designs
+table(df$Study_design, useNA = "always")
+table(df$analysisdesign_simplified, useNA = "always")
+
+# 1.2 publication year
+table(df$Publication_year, useNA = "always")
+hist(df$Publication_year, breaks = seq(2008.5, 2024.5, by = 1),  # ensures one bin per year
+     xlab = "Publication Year",
+     ylab = "Number of studies",
+     col = "lightblue",
+     border = "white",
+     xlim = c(2009, 2024),
+     xaxt = "n")
+axis(1, at = 2009:2024, labels = 2009:2024)
+
+# 1.3 create a map with the frequency of studies by country
 countries <- df %>%
   select(Study_country) %>%
-  mutate(Study_country = str_remove_all(Study_country, "Other:\\s*")) %>% 
-  mutate(Study_country = str_replace_all(Study_country, c(
-    "Brasil" = "Brazil",
-    "UK" = "United Kingdom",
-    "South-Korea" = "South Korea",
-    "Korea" = "South Korea",   # careful: will also catch "North Korea" if present
-    "OPT" = "Palestine"        # adapt as needed
-  ))) %>%
-  # split multi-country entries into separate rows
-  mutate(Study_country = str_split(Study_country, ",|;")) %>%
+  mutate(Study_country = str_split(Study_country, ",|;")) %>%  # split multi-country entries into separate rows
   unnest(Study_country) %>%
   mutate(Study_country = str_trim(Study_country)) %>%
   mutate(iso3 = countrycode(Study_country, "country.name", "iso3c")) %>%
@@ -500,8 +597,11 @@ ggplot(world_data) +
   direction = 1,
   na.value = "grey90")
 ggsave(filename = "map.jpeg",  width = 8, height = 5, dpi = 300)
+# income levels
+incomesumm <- df %>% group_by(incomegroup) %>% summarise(n=n()) %>% mutate(pct = round(100*n/sum(n),1))
+incomesumm
 
-# 1.2 level of healthcare
+# 1.4 level of healthcare
 df <- df %>%
   mutate(facilitylevel = case_when(
       str_detect(Healthcare_facility_type, regex("Primary|community", ignore_case = TRUE)) ~ "Primary",
@@ -538,7 +638,7 @@ ggplot(df_summary, aes(x = facilitylevel, y = n, fill = facilitylevel)) +
   )
 ggsave(filename = "bar_chart_healthcare_level.jpeg",  width = 8, height = 5, dpi = 300)
 
-# 1.3. patient population
+# 1.5 patient population
 patientpop <- df %>% select(Population_admitting_ward) %>%
   mutate(Population_admitting_ward = str_split(Population_admitting_ward, ";")) %>%
   unnest(Population_admitting_ward) %>%
@@ -550,7 +650,7 @@ patientpop <- df %>% select(Population_admitting_ward) %>%
            str_detect(Population_admitting_ward, "Pediatric") ~ "Pediatric",
            str_detect(Population_admitting_ward, "Adult") ~ "Adult",
            str_detect(Population_admitting_ward, "Emergency") ~ "Critical",
-           str_detect(Population_admitting_ward, "Surgical") ~ "Surgical/Burns",
+           str_detect(Population_admitting_ward, "Surgical") ~ "Surgical",
            str_detect(Population_admitting_ward, "General") ~ "General",
            str_detect(Population_admitting_ward, "Unknown") ~ "Unknown/Unclear",
            str_detect(Population_admitting_ward, "Other") ~ "Other",
@@ -678,11 +778,11 @@ summary_indicator_frequencies
 
 # 2.2 CATEGORICAL VARIABLES
 # count categorical indicators reported
-length(unique(df_longer$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
-length(unique(df_longer$`Proportion Variable_description`))
-# summarize the reported indicators 
+length(unique(categorical_df$`Number Variable_description`)) # 2111 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
+length(unique(categorical_df$`Proportion Variable_description`))
+# summarize the reported indicators, overall and by AMR profile
 categorical_summary <- categorical_df %>%
-  group_by(indicatorcategory, amr) %>%
+  group_by(indicatorcategory) %>%
   summarise(
     n_studies = n_distinct(Study_ID),                           
     sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
@@ -695,6 +795,22 @@ categorical_summary <- categorical_df %>%
   ) %>%
   ungroup()
 categorical_summary
+write_xlsx(categorical_summary, file = "categorical_summary.xlsx")
+
+categorical_by_amr_summary <- categorical_df %>%
+  group_by(indicatorcategory, amr) %>%
+  summarise(
+    n_studies = n_distinct(Study_ID),                           
+    sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
+    sum_susceptible_tot = sum(Susceptible_group_tot_nb, na.rm = TRUE), 
+    sum_resistant_value = sum(`Number Resistant_group_value`, na.rm = TRUE), 
+    sum_susceptible_value = sum(`Number Susceptible_comparator_group_value`, na.rm = TRUE), 
+    median_or = median(or, na.rm = TRUE),                    
+    q25_or = quantile(or, 0.25, na.rm = TRUE),               # 25th percentile
+    q75_or = quantile(or, 0.75, na.rm = TRUE)                # 75th percentile
+  ) %>%
+  ungroup()
+categorical_by_amr_summary
 # visualize all odds ratios reported by studies on a plot, excluding those with a missing value
 # first remove extreme values of values with a 
 categorical_df_or <- categorical_df %>% filter(!is.na(or), !is.na(ci_low), !is.na(ci_high), or > 0, ci_low > 0, ci_high > 0, or>0.1 & or <20)
