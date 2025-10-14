@@ -2,6 +2,8 @@
 # SCOPING REVIEW FOR AMR PROXY INDICATORS #
 ###########################################
 
+# last update: 14/10/2025
+
 # install/load packages
 pacman::p_load(readxl, writexl, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm)
 
