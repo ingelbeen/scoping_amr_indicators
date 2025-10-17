@@ -8,19 +8,21 @@
 pacman::p_load(readxl, writexl, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm)
 
 #### 0. IMPORT/CLEAN DATA #### 
-df <- read_excel("20250830 WHO_Extracted-data_Consensed_review_457022_20250830231950.xlsx")
-# see that numeric variables could not be imported as such, since they  sometimes contains characters, like "n=..."
+df <- read_excel("db/20251011 review_457022_20251011204039_ALLminus6.xlsx") # note that numeric variables could not be imported as such, since they  sometimes contains characters, like "n=..."
+
 # display variable names
 print(colnames(df), max = 1900)
 table(df$AMR_mechanism_1)
 table(df$AMR_mechanism_2)
 # remove all empty columns
-df <- df %>%  select(where(~ any(!is.na(.) & . != "")))
-# some variable names have twice the '_n' that refers to the nth proxy indicator in that article. keep only the '_n' at the end of the column name
+# df <- df %>%  select(where(~ any(!is.na(.) & . != ""))) # gives an error
+df <- df %>%  select(where(~ any(!is.na(.)) && (is.numeric(.) || is.logical(.) || any(as.character(.) != ""))))
+
+# some variable names have twice the '_n' that refers to the n-th proxy indicator in that article. keep only the '_n' at the end of the column name
 names(df) <- gsub("(?<=total)_[0-9]+", "", names(df), perl = TRUE)
 names(df) <- gsub("resistant_20 ", "resistant_group ", names(df))
 
-# I here initially excluded those analyses that did not report AMR as an outcome measure, but that variable Outcome_measure_repoted might not be entered correctly, with some studies having cost or mortality as primary outcome but still reporting on an analysis with AMR as outcome
+# I here initially excluded those analyses that did not report AMR as an outcome measure, but that variable Outcome_measure_repoted (sic) might not be entered correctly, with some studies having cost or mortality as primary outcome but still reporting on an analysis with AMR as outcome
 table(df$Outcome_measure_repoted)
 
 # clean variables describing studies in df
@@ -33,7 +35,7 @@ df$analysisdesign_simplified <- ifelse(grepl("control", df$Study_design, ignore.
                                            ifelse(grepl("cross[ -]?sectional", df$Study_design, ignore.case = TRUE),"Cross-sectional study", "Other/not specified")))
 table(df$Study_design, df$analysisdesign_simplified, useNA = "always")
 
-# a var studypop, extracting age specific populations from the var 'Population_admitting_ward'
+# a var 'studypop', extracting age specific populations from the var 'Population_admitting_ward'
 df$studypop <- dplyr::case_when(
   grepl("adult", df$Population_admitting_ward, ignore.case = TRUE) &
     grepl("pediatric|paediatric", df$Population_admitting_ward, ignore.case = TRUE) &
@@ -49,6 +51,8 @@ df$studypop <- dplyr::case_when(
   grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE) ~ "Neonates",
     TRUE ~ "All ages or not specified")
 table(df$studypop, useNA = "always")
+
+# a var 'highrisk" should ideally identify the specific studies in high-risk populations, the complication being that many studies have a mix of high risk and 'regular' hospitalisations
 table(df$Population_admitting_ward[grepl("burn", df$Population_admitting_ward, ignore.case = T)])
 # study countries
 df <- df %>% mutate(Study_country = str_remove_all(Study_country, "Other:\\s*"))
