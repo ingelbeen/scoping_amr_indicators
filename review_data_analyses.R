@@ -53,7 +53,15 @@ df$studypop <- dplyr::case_when(
 table(df$studypop, useNA = "always")
 
 # a var 'highrisk" should ideally identify the specific studies in high-risk populations, the complication being that many studies have a mix of high risk and 'regular' hospitalisations
-table(df$Population_admitting_ward[grepl("burn", df$Population_admitting_ward, ignore.case = T)])
+# now it excludes the studies that are also labelled "General"
+df$highrisk <- dplyr::case_when(
+  (grepl("neonat", df$Population_admitting_ward, ignore.case = TRUE)==T & grepl("general ", df$Population_admitting_ward, ignore.case = TRUE)==F) ~ "high risk",
+  (grepl("Immunocompromised", df$Population_admitting_ward, ignore.case = TRUE)==T & grepl("general ", df$Population_admitting_ward, ignore.case = TRUE)==F) ~ "high risk",  
+  (grepl("Critical", df$Population_admitting_ward, ignore.case = TRUE)==T & grepl("general ", df$Population_admitting_ward, ignore.case = TRUE)==F) ~ "high risk",  
+  TRUE ~ "regular, several popualtions, or unspecified")
+# checked the studies with as admitting ward 'surgical and burns': only #3494 is actually burns (and is also labelled critical) – Burns and ICU patients included from a Burn unit “patients who had clinically relevant Pa BSIs and were registered in the database of the BICU of CologneMerheim Medical Center”
+table(df$Population_admitting_ward, df$highrisk)
+
 # study countries
 df <- df %>% mutate(Study_country = str_remove_all(Study_country, "Other:\\s*"))
 df <- df %>% mutate(Study_country = str_replace_all(Study_country, c(
@@ -114,6 +122,9 @@ income_lookup <- c(
   "24 countries from Europe (Turkey, Portugal, Italy, Slovak Republic, Serbia, France, Romania, Cyprus, Bosnia and Herzegovina, Kosovo, North Macedonia, Bulgaria, Belgium, Hungary), Middle East and North Africa (Egypt, Lebanon, Oman, Iran, Palestine), South Asia (Bangladesh, Pakistan, India), Latin America and the Caribbean (Puerto Rico), and East Asia (Thailand)" = "Multiple")
 df$incomegroup <- income_lookup[df$Study_country]
 
+# one study is an intervention study and therefore part of a different analysis - to be removed
+df <- df %>% filter(Study_ID!="#11818")
+
 # we need three databases for the planned analyses: 
 # 1) one with one row/observation per study, to summarize study characteristics -> df
 # 2) one with a row per analysis (i.e, comparison AMR vs susceptible) done, to report on the associations measured -> df_long with one row per comparison (so-called 'model')
@@ -138,27 +149,25 @@ df_long <- df_long %>% filter(!is.na(Resistant_grp_definition))
 table(df_long$Resistant_grp_definition, useNA = "always")
 # replace non specific 'resistance' by other variable values that have the specific resistance profile studied
 df_long <- df_long %>%
-  mutate(
-    Resistant_grp_definition = case_when(
+  mutate(Resistant_grp_definition = case_when(
       Resistant_grp_definition %in% c("AMR", "Resistant", "Resistance +", "MRO", "MDRO", "Resistance to First-line Antibiotics") ~ 
         coalesce(AMR_mechanism_1, AMR_mechanism_2, Resistant_grp_definition),
       TRUE ~ Resistant_grp_definition))
 # resist_models <- as.data.frame(table(df_long$Resistant_grp_definition, useNA = "always"))
 # write.table(resist_models, "resist_models.txt")
-
 df_long <- df_long %>%  mutate(amr = case_when(
       (grepl("MRSA", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("ESBL|CRE|vancom|MDR", Resistant_grp_definition, ignore.case = TRUE)==F) ~ "methicillin resistance",
       (grepl("oxacillin|methicillin", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("linezolid", Resistant_grp_definition, ignore.case = TRUE)==T) ~ "methicillin and linezolid resistance",
       (grepl("oxacillin|methicillin", Resistant_grp_definition, ignore.case = TRUE)==T & grepl("linezolid", Resistant_grp_definition, ignore.case = TRUE)==F) ~ "methicillin resistance",
-      grepl("ESBL", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
+      grepl("ESBL|blaAmpC producing|Ceph-R", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
       grepl("VRE", Resistant_grp_definition, ignore.case = TRUE) ~ "vancomycin resistance",
-      grepl("\\bMDR\\b", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
-      grepl("(MRO)", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
-      grepl("MDRAB", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR (some defined, some non specified)",
-      grepl("MDRO", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin, carbapenem or methicillin resistance (depending on isolated pathogen)",
+      grepl("\\bMDR\\b", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR",
+      grepl("(MRO)", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR",
+      grepl("MDRAB", Resistant_grp_definition, ignore.case = TRUE) ~ "MDR",
+      grepl("MDRO", Resistant_grp_definition, ignore.case = TRUE) ~ "multiple AMR profiles combined",
       grepl("Carba", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
-      grepl("Resistance (+)", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin, carbapenem or methicillin resistance (depending on isolated pathogen)",
-      grepl("XDR", Resistant_grp_definition, ignore.case = TRUE) ~ "XDR (not defined)",
+      grepl("Resistance (+)", Resistant_grp_definition, ignore.case = TRUE) ~ "multiple AMR profiles combined",
+      grepl("XDR", Resistant_grp_definition, ignore.case = TRUE) ~ "XDR",
       grepl("3GC", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
       grepl("EPE", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
       grepl("third generation", Resistant_grp_definition, ignore.case = TRUE) ~ "3rd gen cephalosporin resistance",
@@ -175,29 +184,82 @@ df_long <- df_long %>%  mutate(amr = case_when(
       grepl("piperacillin|tazobactam", Resistant_grp_definition, ignore.case = TRUE) ~ "pip/tazo resistance",
       grepl("CR", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("CPE", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
-      grepl("Meropenem-nonsus", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
+      grepl("Meropenem-nonsus|CnSKP", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("KPC", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("reduced susceptibility to cefuroxime and genta", Resistant_grp_definition, ignore.case = TRUE) ~ "cefuroxime + gentamycin resistance",
       grepl("CASR", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem + ampicillin/sulbactam resistance",
       grepl("resistant group", Resistant_grp_definition, ignore.case = TRUE) ~ "?",
       grepl("Ampicillin and gentamicin", Resistant_grp_definition, ignore.case = TRUE) ~ "ampicillin + gentamycin resistance",
       grepl("SNS", Resistant_grp_definition, ignore.case = TRUE) ~ "sulbactam non susceptible",
-      grepl("LNZ", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible",
+      grepl("LNZ", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
+      grepl("LIN-R", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
+      grepl("linezolid-resistant", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
       grepl("imipenem-res", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("HLRG", Resistant_grp_definition, ignore.case = TRUE) ~ "high-level gentamicin resistance",
       grepl("Drug resistant gram posit", Resistant_grp_definition, ignore.case = TRUE) ~ "not specified resistance",
+      grepl("ARM|IRABC|CnSKP|DTR|Resistant BSI|Resistant gram-negatives|Resistant GNBSI|PSBSI|PDR", Resistant_grp_definition, ignore.case = TRUE) ~"STILL TO VERIFY",
       TRUE ~ Resistant_grp_definition))   # keep original for unique/rare categories
+# some more manual verifications done (email Esmée 16/10/2025 with exact description of AMR profiles in papers)
+df_long$amr[df_long$Study_ID=="#9394"] <- "carbapenem resistance"
+df_long$amr[df_long$Study_ID=="#1574"] <- "carbapenem resistance"
+df_long$amr[df_long$Study_ID=="#4088"] <- "3rd gen cephalosporin resistance"
+df_long$amr[df_long$Study_ID %in% c("#8208", "#6441", "#6260", "#5509", "#4217", "#3114", "#2869", "#2480", "#2444", "#2122", "#1446", "#1412", "#1217", "#917",
+                                    "#835", "#798", "#637", "#346", "#58")] <- "MDR"
+df_long$amr[df_long$Study_ID %in% c("#3999", "#3992", "#3756", "#2771", "#914")] <- "MDR but incorrectly or more extensively defined"
+df_long$amr[df_long$Study_ID %in% c("#3847", "#3335", "#3189", "#2213", "#1984", "#1010", "#648", "#637", "#601", "#46")] <- "multiple AMR profiles combined"
+df_long$amr[df_long$Study_ID %in% c("#9333", "#7504", "#4938")] <- "resistance against multiple Watch antibiotics "
+df_long$amr[df_long$Study_ID=="#69"] <- "multiple AMR profiles combined"
+df_long$amr[df_long$Resistant_grp_definition=="BSA-resistant (broad-spectrum antibiotic resistant) GNBSI"] <- "resistance against multiple Watch antibiotics "
+
+table(df_long$amr, useNA = "always")
+
+# one study is entered twice as different AMR models, but are actually the same
+df_long <- df_long %>% filter(Study_ID!="#2444"|Resistant_grp_definition!="MDR BSI")
+
+# export an overview
 amrgroups <- df_long %>% group_by(amr, Resistant_grp_definition) %>% summarise(n=n())
 write_xlsx(amrgroups, "amrgroups.xlsx")
 
 # summary of those with non specific resistance profiles reported
 check_amr <- df_long %>% filter(grepl("\\bMDR\\b|(MRO)|MDRAB|MDRO|XDR|resistant group|Resistance (+)|Drug resistant gram positive", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
 write_xlsx(check_amr, "check_amr.xlsx")
-df_long %>% filter(grepl("oxacillin|methicillin|linezolid", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
-df_long %>% filter(grepl("nitrofur", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
+check_amr2 <- df_long %>% filter(grepl("oxacillin|methicillin|linezolid", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr)
+check_amr3 <- df_long %>% filter(grepl("ARM|IRABC|Difficult to treat (DTR) - before propensity score (PS) matching|Difficult to treat (DTR) - after propensity score (PS) matching|Resistant BSI|Resistant gram-negatives|Resistant GNBSI|PSBSI (persistent S. aureus in bloodstream infection)|PDR", Resistant_grp_definition, ignore.case = TRUE)) %>% select(Study_ID, Resistant_grp_definition, amr, Title...3, Title...6)
 
 # check columns
 print(colnames(df_long), max = 1900)
+
+# clean isolated bacteria, and group them if possible, creating a new variable 'pathogengroup'
+df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
+      # 1) CR-Enterobacterales
+      amr == "3rd gen cephalosporin resistance" & 
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-Enterobacterales",
+      
+      # 2) C3GR-Enterobacterales (including ESBL)
+      amr == "ESBL" & 
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3GR-Enterobacterales",
+      
+      # 3) MRSA
+      amr == "methicillin resistance" & 
+        grepl("Staphylococcus aureus|MRSA|MSSA", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "MRSA",
+      
+      # 4) PRSP
+      amr == "penicillin resistance" & 
+        grepl("Streptococcus pneumoniae|S\\. pneumoniae", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "PRSP",
+      
+      # 5) CRAB
+      amr == "carbapenem resistance" & 
+        grepl("Acinetobacter", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CRAB",
+      
+      # 6) CR-P. Aeruginosa
+      amr == "carbapenem resistance" & 
+        grepl("Pseudomonas|P\\. Aeruginosa", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P. Aeruginosa",
+      
+      # 7) Other (default)
+      TRUE ~ "Other"))
+table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed
+
+
 
 # create an even longer df, with one row per variable/exposure of interest reported
 df_long <- df_long %>% rename_with(~ str_replace_all(., "-(\\d+)_name", "_\\1")) # make sure all variable names belonging to the same indicator have the same number at the end
@@ -565,7 +627,7 @@ categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categoric
 
 #### 1. DESCRIPTION OF STUDIES ####
 # 1.1 count of studies & designs
-table(df$Study_design, useNA = "always")
+count(df)
 table(df$analysisdesign_simplified, useNA = "always")
 
 # 1.2 publication year
@@ -748,9 +810,9 @@ ggsave(filename = "bar_chart_bacterial_isolates_analysed.jpeg",  width = 8, heig
 
 # summarize AMR profiles
 counts <- df_long %>%
-  count(Resistance_group, sort = TRUE)
+  count(amr, sort = TRUE)
 counts
-ggplot(counts, aes(x = fct_reorder(Resistance_group, n), y = n)) +
+ggplot(counts, aes(x = fct_reorder(amr, n), y = n)) +
   geom_col(fill = "#800000") +
   coord_flip() +
   labs(
