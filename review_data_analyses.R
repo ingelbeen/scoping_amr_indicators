@@ -232,12 +232,12 @@ print(colnames(df_long), max = 1900)
 # clean isolated bacteria, and group them if possible, creating a new variable 'pathogengroup'
 df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
       # 1) CR-Enterobacterales
-      amr == "3rd gen cephalosporin resistance" & 
-        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-Enterobacterales",
+    amr == "3rd gen cephalosporin resistance" &
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-Enterobacterales",  #KM - should be "carbapenem resistance instead of 3rd gen cephalosporin resistance
       
       # 2) C3GR-Enterobacterales (including ESBL)
       amr == "ESBL" & 
-        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3GR-Enterobacterales",
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3GR-Enterobacterales",  #KM - ESBL not part of amr categories
       
       # 3) MRSA
       amr == "methicillin resistance" & 
@@ -257,9 +257,8 @@ df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
       
       # 7) Other (default)
       TRUE ~ "Other"))
-table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed
 
-
+table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed # KM - table does not show any C3GR-Enterobacterales or PRSP
 
 # create an even longer df, with one row per variable/exposure of interest reported
 df_long <- df_long %>% rename_with(~ str_replace_all(., "-(\\d+)_name", "_\\1")) # make sure all variable names belonging to the same indicator have the same number at the end
@@ -289,6 +288,30 @@ colnames(continuous_df)
 
 # get rid of empty rows (per study model, up to 20 indicators reported, but usually les, so many rows are empty)
 continuous_df <- continuous_df %>% filter(!is.na(`resistant_group definition`))
+
+#export list of ALL continuous proxy indicators keeping unique indicator names. Initial Export with ghost lines, remove space
+write_xlsx(
+  continuous_df %>%
+    mutate(
+      ind = as.character(`resistant_group variable`),
+      ind = str_replace_all(ind, "\u00A0", " "),   # replace non-breaking spaces
+      ind = str_replace_all(ind, "[\r\n\t]", " "), # drop CR/LF/tabs
+      ind = str_squish(ind)                        # trim + collapse internal spaces
+    ) %>%
+    filter(!is.na(ind), ind != "") %>%            
+    arrange(ind) %>%
+    select(`resistant_group variable` = ind, `Covidence #`, `Model`, `Notes`, `General notes_AMR`, `General notes - if any...48`),  
+  "list_all_continuous_indicators.xlsx"
+)
+
+#export list of UNIQUE continuous proxy indicators keeping unique indicator names
+continuous_df %>% 
+  select('resistant_group variable') %>% 
+  filter(!is.na(`resistant_group variable`),
+         `resistant_group variable` != "") %>%
+  distinct() %>% 
+  arrange('resistant_group variable') %>% 
+  write_xlsx("list_unique_continuous_indicators.xlsx")
 
 # create categories to group reported indicators -> continuous indicators reported in "resistant_group variable"
 continuous_df <- continuous_df %>%  mutate(indicatorcategory = case_when(
