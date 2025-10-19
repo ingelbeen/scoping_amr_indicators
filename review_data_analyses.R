@@ -5,10 +5,10 @@
 # last update: 14/10/2025
 
 # install/load packages
-pacman::p_load(readxl, writexl, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm)
+pacman::p_load(here, readxl, writexl, openxlsx, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm, DT)
 
 #### 0. IMPORT/CLEAN DATA #### 
-df <- read_excel("db/20251011 review_457022_20251011204039_ALLminus6.xlsx") # note that numeric variables could not be imported as such, since they  sometimes contains characters, like "n=..."
+df <- read_excel("db/data_raw/20251011 review_457022_20251011204039_ALLminus6.xlsx") # note that numeric variables could not be imported as such, since they  sometimes contains characters, like "n=..."
 
 # display variable names
 print(colnames(df), max = 1900)
@@ -300,7 +300,7 @@ write_xlsx(
     ) %>%
     filter(!is.na(ind), ind != "") %>%            
     arrange(ind) %>%
-    select(`resistant_group variable` = ind, `Covidence #`, `Model`, `Notes`, `General notes_AMR`, `General notes - if any...48`),  
+    select(`resistant_group variable` = ind, `Covidence #`, `Model`, `resistant_group definition`, `resistant_group mean`, `resistant_group median`, `Notes`, `General notes_AMR`, `General notes - if any...48`),  
   "list_all_continuous_indicators.xlsx"
 )
 
@@ -313,6 +313,407 @@ continuous_df %>%
   arrange('resistant_group variable') %>% 
   write_xlsx("list_unique_continuous_indicators.xlsx")
 
+#KM - continuous indicators list checked manually in excel and categories created - with differences from the below initial categorization
+#use the excel and join to the original continuous_df dataframe
+#When need to change based on input from others, apply global renames for mass renames of catergories +/- targeted override for small tweaks with mutate - so no need to change subsequent code
+
+#point mapping inside repo so anyone can access it 
+cont_map_path <- here::here(
+  "db", "indicators_mapping", "map_all_continuous_indicators_categorized_initial.xlsx"
+  ) 
+
+stopifnot(file.exists(cont_map_path)) #ensure file exists
+
+#a.clean the list
+clean_text <- function(x) {
+  x |>
+    as.character() |>
+    str_replace_all("\u00A0", " ") |>
+    str_replace_all("[\r\n\t]", " ") |>
+    str_squish() |>
+    str_to_lower()
+}
+
+#b.read mapping into R and check key columns needed to join are there : covidence #, resistant_group variable, resistant_group definition, indicator category level1, indicator cat and the value of the mean or median, whichever exists
+cont_map_df <- read_excel(cont_map_path)
+
+stopifnot(all(c(
+              "Covidence #", "resistant_group variable", "resistant_group definition", 
+              "cont_indicatorcategory_l1", "cont_indicatorcategory_l2", "resistant_group mean", "resistant_group median") %in% names(cont_map_df)))
+
+#c.create value keys for the matching variables and clean them on both sides - needed to clean variables ie lower cases, spaces..., to join on median or mean value whichver exists and prevent row multiplication - many in the database
+cont_map_keys <- cont_map_df %>% 
+  mutate(
+    cov_clean = clean_text(`Covidence #`),
+    res_var_clean = clean_text(`resistant_group variable`),
+    res_def_clean = clean_text(`resistant_group definition`),
+    #create the key to match for value of mean or median depending on which comes first
+    mean_median_key = coalesce(
+      as.character(`resistant_group mean`),
+      as.character(`resistant_group median`))
+    |> str_replace_all("\u00A0", "") |> str_squish(),
+    l1 = na_if(str_squish(cont_indicatorcategory_l1), ''),
+    l2 = na_if(str_squish(cont_indicatorcategory_l2), "")
+)
+
+#d.collapse the mapping to one row per (cov_clean, res_var_clean, res_def_clean, mean-median_key)
+#set duplicates to disagree as NA so they can be viewed and dealt with. variables that have con_indicatorcategory_l1 and l2 empty coz need to be removed from here will be NA
+cont_map_collapse <- cont_map_keys %>% 
+  group_by(cov_clean, res_var_clean, res_def_clean, mean_median_key) %>% 
+  summarize(
+    n_rows = n(),
+    n_l1 = n_distinct(na.omit(l1)),
+    n_l2 = n_distinct(na.omit(l2)),
+    cont_indicatorcategory_l1 = if (n_l1 <= 1) first(na.omit(l1)) else NA_character_,
+    cont_indicatorcategory_l2 = if (n_l2 <= 1) first(na.omit(l2)) else NA_character_,
+    .groups = "drop"
+  )
+
+#view conflicts
+conflicts <- cont_map_collapse %>%  filter(n_l1 > 1 | n_l2 > 1)
+if (nrow(conflicts) > 0) {
+  warning(sprintf("Mapping has %d conflicting 4-keys (same key --> multiple categories - fix in excel later", nrow(conflicts)))
+}
+
+#e.remove any blank or NA in the predictor (resistant_group variable) in continuous_df
+continuous_df <- continuous_df %>% 
+  filter(
+    !(is.na(`resistant_group variable`) |
+      str_squish(as.character(`resistant_group variable`)) == "")
+  )
+
+#verify no blank remains
+stopifnot(
+  !any(is.na(continuous_df$`resistant_group variable`) |
+         str_squish(as.character(continuous_df$`resistant_group variable`)) == "")
+)
+
+#f.build the same 4 matching keys in continuous_df
+stopifnot(all(c(
+              "Covidence #", "resistant_group variable", "resistant_group definition", 
+              "resistant_group mean", "resistant_group median") %in% names(continuous_df)))
+
+continuous_df_keys <- continuous_df %>% 
+  mutate(
+    cov_clean = clean_text(`Covidence #`),
+    res_var_clean = clean_text(`resistant_group variable`),
+    res_def_clean = clean_text(`resistant_group definition`),
+    mean_median_key = coalesce(
+      as.character(`resistant_group mean`),
+      as.character(`resistant_group median`))
+    |> str_replace_all("\u00A0", "") |> str_squish()
+  )
+
+#g.safe left join on the 4 keys - no row multiplication for those doubles 
+n_before <- nrow(continuous_df_keys)
+
+continuous_df <- continuous_df_keys %>% 
+  left_join(
+    cont_map_collapse %>% 
+      select(cov_clean, res_var_clean, res_def_clean, mean_median_key,
+             cont_indicatorcategory_l1, cont_indicatorcategory_l2),
+    by = c("cov_clean", "res_var_clean", "res_def_clean", "mean_median_key")
+  ) %>% 
+select(-cov_clean, -res_var_clean, -res_def_clean, -mean_median_key)
+
+n_after <- nrow(continuous_df)
+if (n_after != n_before) {
+  warning(sprintf("row count changed after; check in any not intended many-to-many matches", n_before, n_after))
+}
+
+#------ ---- START-START-START --- CHECK the joint Excel of continuous variables for QA ---- START
+joined_keys <- continuous_df %>%
+  mutate(
+    cov_clean = str_squish(str_to_lower(`Covidence #`)),
+    res_var_clean = str_squish(str_to_lower(`resistant_group variable`)),
+    res_def_clean = str_squish(str_to_lower(`resistant_group definition`)),
+    mean_median_key = coalesce(as.character(`resistant_group mean`),
+                         as.character(`resistant_group median`)) %>%
+      str_replace_all("\u00A0","") %>% str_squish()
+  )
+
+#every row should map to exactly 1 record of that key (such as no 1→many explosion after the join)
+dup_check <- joined_keys %>%
+  count(cov_clean, res_var_clean, res_def_clean, mean_median_key, name = "n_per_key") %>%
+  filter(n_per_key > 1)
+
+nrow(dup_check)  # should be 0
+# If >0, print few
+dup_check %>% head(10)
+
+dup_check %>% tally()                  # how many duplicated 4-keys
+dup_check %>% arrange(desc(n_per_key)) # which keys have the most repeats
+
+#check for one 
+one <- dup_check %>% slice(1)
+
+joined_keys %>%
+  filter(
+    cov_clean  == one$cov_clean,
+    res_var_clean == one$res_var_clean,
+    res_def_clean == one$res_def_clean,
+    mean_median_key == one$mean_median_key
+  ) %>%
+  select(`Covidence #`, `resistant_group variable`, `resistant_group definition`,
+         `resistant_group mean`, `resistant_group median`,
+         Model, set, cont_indicatorcategory_l1, cont_indicatorcategory_l2) %>%
+  print(n = Inf)
+#actual duplictae 
+
+#count duplicates
+# Count total number of duplicate rows (identical across ALL columns)
+total_duplicates <- continuous_df %>%
+  duplicated() %>%        # logical vector: TRUE for duplicated rows
+  sum()                   # count how many TRUEs
+total_duplicates #they are zero
+
+#count duplicates based on my 4 keys
+key_cols <- c("Covidence #",
+              "resistant_group variable",
+              "resistant_group definition",
+              "resistant_group mean",
+              "resistant_group median")
+
+dup_by_key <- continuous_df %>%
+  count(across(all_of(key_cols)), name = "n_per_key") %>%
+  filter(n_per_key > 1)
+
+#number of duplicated 4 keys
+n_dupl_keys <- nrow(dup_by_key)
+
+#number of duplicated rows (counting all repeats)
+n_dupl_rows <- sum(dup_by_key$n_per_key) - n_dupl_keys
+
+n_dupl_keys   # how many unique 4 keys are duplicated
+n_dupl_rows   # how many extra rows that represent duplicates
+
+dup_summary <- continuous_df %>%
+  mutate(is_dup_4key = duplicated(select(., all_of(key_cols))) |
+           duplicated(select(., all_of(key_cols)), fromLast = TRUE)) %>%
+  summarise(
+    total_rows = n(),
+    unique_rows = sum(!is_dup_4key),
+    duplicated_rows = sum(is_dup_4key),
+    duplicated_percent = round(mean(is_dup_4key) * 100, 2)
+  )
+dup_summary #GIVE totals of duplicates - random check show that they actually match what I have ticked as "double" in excel - to check with Brecht from wher eit is coming
+
+dup_by_key %>% arrange(desc(n_per_key)) %>% head(30)
+
+joined_keys %>%
+  summarise(
+    rows_total = n(),
+    level1_assigned = sum(!is.na(cont_indicatorcategory_l1)),
+    level2_assigned = sum(!is.na(cont_indicatorcategory_l2)),
+    both_missing = sum(is.na(cont_indicatorcategory_l1) & is.na(cont_indicatorcategory_l2))
+  ) #almost match the initial excel (35 empty because they need to be in categorical or have no p-value)
+
+#check of any rowa that did not match the mapping
+unmatched <- joined_keys %>%
+  filter(is.na(cont_indicatorcategory_l1) & is.na(cont_indicatorcategory_l2)) %>%
+  distinct(`Covidence #`, `resistant_group variable`, `resistant_group definition`,
+           `resistant_group mean`, `resistant_group median`) %>%
+  arrange(`Covidence #`, `resistant_group variable`)
+#view(unmatched)  
+nrow(unmatched) 
+
+#unmatched show 27 - check if those are true duplicates as they need to be zero
+#define the 4 keys exactly sed in the join
+key_cols <- c("Covidence #",
+              "resistant_group variable",
+              "resistant_group definition",
+              "resistant_group mean",
+              "resistant_group median")
+#find which showe more than once and view them
+dup_keys <- continuous_df %>%
+  count(across(all_of(key_cols)), name = "n_per_key") %>%
+  filter(n_per_key > 1)
+nrow(dup_keys)        # should print 27
+View(dup_keys)        # they are NOT actual duplicates - they need to be all kept - so checked
+
+#check a quick sample to see if it looks right
+set.seed(1)
+joined_keys %>%
+  select(`Covidence #`, `resistant_group variable`, `resistant_group definition`,
+         `resistant_group mean`, `resistant_group median`,
+         cont_indicatorcategory_l1, cont_indicatorcategory_l2) %>%
+  sample_n(min(10, n()))
+#I see one that has "NA" for "resistance_group variable" - this cannot be
+
+#count how many rows have an empty/missing resiatnce_group variable name
+continuous_df %>%
+  filter(is.na(`resistant_group variable`) |
+           str_squish(`resistant_group variable`) == "") %>%
+  summarise(n_missing = n())
+missing_var_rows <- continuous_df %>%
+  filter(is.na(`resistant_group variable`) |
+           str_squish(`resistant_group variable`) == "")
+View(missing_var_rows) #only 1
+
+#check where this empty error is coming from
+cont_map_df %>%
+  filter(is.na(`resistant_group variable`) |
+           str_squish(`resistant_group variable`) == "") %>%
+  summarise(n_missing = n()) #it is zero means they appear after the join (none empty in my excel) 
+
+#check if there are unmatched join results"
+continuous_df %>%
+  filter(is.na(`resistant_group variable`)) %>%
+  select(`Covidence #`, starts_with("resistant_group"), starts_with("cont_")) %>%
+  head(20) #looks like for this one row did not find match 
+
+continuous_df %>%
+  transmute(original = `resistant_group variable`,
+            cleaned = clean_text(`resistant_group variable`)) %>%
+  filter(is.na(cleaned) | cleaned == "")
+
+#see if each 4 key maps t just one pair of categories
+key_to_cat <- joined_keys %>%
+  group_by(cov_clean, res_var_clean, res_def_clean, mean_median_key) %>%
+  summarise(
+    n_l1 = n_distinct(na.omit(cont_indicatorcategory_l1)),
+    n_l2 = n_distinct(na.omit(cont_indicatorcategory_l2)),
+    .groups = "drop"
+  ) %>%
+  filter(n_l1 > 1 | n_l2 > 1)
+
+nrow(key_to_cat)  # should be 0
+key_to_cat %>% head(10)
+
+#some summaries
+# Distribution of Level-1 categories
+joined_keys %>% count(cont_indicatorcategory_l1, sort = TRUE)
+
+#cross-tab of l1 by l22 (see top 30)
+joined_keys %>%
+  count(cont_indicatorcategory_l1, cont_indicatorcategory_l2, sort = TRUE) %>%
+  head(30)
+
+#------ ---- END-END_END - CHECK the joint Excel of continuous variables for QA ----
+
+#SUMMARY - summarize the data to share with the team
+#a.drop rows where indicator_l1 and l2 are empty
+summary_cont_indicators <- continuous_df %>%
+  filter(!is.na(cont_indicatorcategory_l1)) %>%                
+  mutate(
+    # tidy the original indicator a bit for nicer lists
+    continuous_indicator_clean = str_squish(as.character(`resistant_group variable`))
+  )
+
+#b.frequency per l1
+freq_continuous_l1 <- summary_cont_indicators %>%
+  group_by(cont_indicatorcategory_l1) %>%
+  summarise(freq_continuous_l1 = n(), .groups = "drop")
+
+#c.summary per (l1, l2) pair - indicators list + l2 frequency
+collapse_list_continuous <- function(x) {
+  #unique, sorted, comma-separated string
+  paste(sort(unique(x[!is.na(x) & x != ""])), collapse = ", ")
+}
+
+pairs_l1_l2 <- summary_cont_indicators %>%
+  group_by(cont_indicatorcategory_l1, cont_indicatorcategory_l2) %>%
+  summarise(
+    indicators_included = collapse_list_continuous(continuous_indicator_clean),
+    frequency_category_l2 = n(),
+    .groups = "drop"
+  )
+
+#d.attach the l1 frequency to each (l1,l2) row
+summary_cont_indicators_out <- pairs_l1_l2 %>%
+  left_join(freq_continuous_l1, by = "cont_indicatorcategory_l1") %>%
+  arrange(cont_indicatorcategory_l1, desc(frequency_category_l2))
+
+#e.view and export
+print(summary_cont_indicators_out, n = 20)
+write_xlsx(
+  list(summary_cont_indicators = summary_cont_indicators_out),
+  "continuous_indicators_summary.xlsx"
+)
+
+#f.bar chart for level_1
+freq_continuous_l1 <- freq_continuous_l1 %>%
+  arrange(desc(freq_continuous_l1)) %>%
+  mutate(cont_indicatorcategory_l1 =
+           factor(cont_indicatorcategory_l1,
+                  levels = cont_indicatorcategory_l1))
+
+p_l1 <- ggplot(freq_continuous_l1,
+               aes(x = reorder(cont_indicatorcategory_l1, freq_continuous_l1),  # asc order
+                   y = freq_continuous_l1)) +
+  geom_col(fill = "#2C7BB6") +
+  coord_flip() +
+  labs(x = "Level 1 category",
+       y = "Count",
+       title = "Continuous-indicators_bar-chart_categories (first level_Level1)") +
+  theme_minimal(base_size = 12)
+
+print(p_l1)
+ggsave("continuous_indicators_bar-chat_level1.png", p_l1, width = 9, height = 6, dpi = 300) #export
+
+#g.heatmap for the top 20 categories - otherwise it does not show well
+top_L2_n <- 20
+
+top_l2 <- summary_cont_indicators %>%
+  filter(!is.na(cont_indicatorcategory_l2)) %>%
+  count(cont_indicatorcategory_l2, name = "n") %>%
+  arrange(desc(n)) %>%
+  slice_head(n = top_L2_n) %>%
+  pull(cont_indicatorcategory_l2)
+
+heat_df <- summary_cont_indicators %>%
+  mutate(L1 = cont_indicatorcategory_l1,
+         L2 = ifelse(is.na(cont_indicatorcategory_l2),
+                     "(Missing L2)",
+                     ifelse(cont_indicatorcategory_l2 %in% top_l2,
+                            cont_indicatorcategory_l2,
+                            "Other (small)"))) %>%
+  count(L1, L2, name = "count")
+
+#order L1 by total count and L2 by overall count 
+l1_order <- heat_df %>%
+  group_by(L1) %>%
+  summarise(n = sum(count), .groups = "drop") %>%
+  arrange(desc(n)) %>% pull(L1)
+
+l2_order <- heat_df %>%
+  group_by(L2) %>%
+  summarise(n = sum(count), .groups = "drop") %>%
+  arrange(desc(n)) %>% pull(L2)
+
+heat_df <- heat_df %>%
+  mutate(L1 = factor(L1, levels = l1_order),
+         L2 = factor(L2, levels = l2_order))
+
+p_heat <- ggplot(heat_df, aes(x = L2, y = L1, fill = count)) +
+  geom_tile() +
+  geom_text(aes(label = count), size = 3) +
+  scale_fill_gradient(low = "#f0f0f0", high = "#08519c") +
+  labs(x = "Level 2 (top & grouped)", y = "Level 1",
+       fill = "Count",
+       title = paste0("Counts by Level 1 × Level 2 (top ", top_L2_n, " L2 shown)")) +
+  theme_minimal(base_size = 11) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p_heat)
+ggsave("continuous_indicators_heatmap_categories_l1_l2.png", p_heat, width = 12, height = 7, dpi = 300) #export
+
+#h.interactive review table
+# Use already built 'summary_cont_indicators_out' (L1,L2, indicators list, and freq)
+datatable(
+  summary_cont_indicators_out,
+  options = list(
+    pageLength = 25,
+    order = list(list(1, "asc"), list(4, "desc")),
+    autoWidth = TRUE
+  ),
+  rownames = FALSE,
+  caption = "Continuous_indicators_categories_Level 1 × Level 2_details-and-frequencies"
+)
+
+
+
+#BI - initial code - continuous indicators
 # create categories to group reported indicators -> continuous indicators reported in "resistant_group variable"
 continuous_df <- continuous_df %>%  mutate(indicatorcategory = case_when(
   str_detect(`resistant_group variable`, regex("age.*years", ignore_case = TRUE)) ~ "Age",
