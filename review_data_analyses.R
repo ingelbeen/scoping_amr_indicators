@@ -2,7 +2,7 @@
 # SCOPING REVIEW FOR AMR PROXY INDICATORS #
 ###########################################
 
-# last update: 20/10/2025 - last commits to Github 20/10/2025 ~1 am
+# last update: 20/10/2025 17h23
 
 # install/load packages
 pacman::p_load(here, readxl, writexl, openxlsx, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm, DT)
