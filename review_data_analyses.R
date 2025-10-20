@@ -2,7 +2,7 @@
 # SCOPING REVIEW FOR AMR PROXY INDICATORS #
 ###########################################
 
-# last update: 14/10/2025
+# last update: 20/10/2025 - last commits to Github 20/10/2025 ~1 am
 
 # install/load packages
 pacman::p_load(here, readxl, writexl, openxlsx, lubridate, haven, dplyr, tidyr, stringr, countrycode, ggplot2, forcats, rnaturalearth, rnaturalearthdata, RColorBrewer, ggbeeswarm, DT)
@@ -21,6 +21,7 @@ df <- df %>%  select(where(~ any(!is.na(.)) && (is.numeric(.) || is.logical(.) |
 # some variable names have twice the '_n' that refers to the n-th proxy indicator in that article. keep only the '_n' at the end of the column name
 names(df) <- gsub("(?<=total)_[0-9]+", "", names(df), perl = TRUE)
 names(df) <- gsub("resistant_20 ", "resistant_group ", names(df))
+names(df) <- gsub("susceptible_compartor_group", "susceptible_comparator_group", names(df)) # typo in one of the column names (only for the first _1 continuous indicator)
 
 # I here initially excluded those analyses that did not report AMR as an outcome measure, but that variable Outcome_measure_repoted (sic) might not be entered correctly, with some studies having cost or mortality as primary outcome but still reporting on an analysis with AMR as outcome
 table(df$Outcome_measure_repoted)
@@ -197,21 +198,31 @@ df_long <- df_long %>%  mutate(amr = case_when(
       grepl("imipenem-res", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
       grepl("HLRG", Resistant_grp_definition, ignore.case = TRUE) ~ "high-level gentamicin resistance",
       grepl("Drug resistant gram posit", Resistant_grp_definition, ignore.case = TRUE) ~ "not specified resistance",
-      grepl("ARM|IRABC|CnSKP|DTR|Resistant BSI|Resistant gram-negatives|Resistant GNBSI|PSBSI|PDR", Resistant_grp_definition, ignore.case = TRUE) ~"STILL TO VERIFY",
-      TRUE ~ Resistant_grp_definition))   # keep original for unique/rare categories
+      grepl("IRABC", Resistant_grp_definition, ignore.case = TRUE) ~"carbapenem resistance",
+      grepl("Penicillin resistant Streptococcus pneumoniae", Resistant_grp_definition, ignore.case = TRUE) ~"penicillin resistance",
+      grepl("Ampicillin resistant", Resistant_grp_definition, ignore.case = TRUE) ~"ampicillin resistance",
+      TRUE ~ tolower(Resistant_grp_definition)))   # keep original for unique/rare categories
 # some more manual verifications done (email Esmée 16/10/2025 with exact description of AMR profiles in papers)
+df_long$amr[df_long$Resistant_grp_definition=="MDR gram negative catheter relates BSI (CRBSI)"] <- "carbapenem resistance"
 df_long$amr[df_long$Study_ID=="#9394"] <- "carbapenem resistance"
 df_long$amr[df_long$Study_ID=="#1574"] <- "carbapenem resistance"
 df_long$amr[df_long$Study_ID=="#4088"] <- "3rd gen cephalosporin resistance"
-df_long$amr[df_long$Study_ID %in% c("#8208", "#6441", "#6260", "#5509", "#4217", "#3114", "#2869", "#2480", "#2444", "#2122", "#1446", "#1412", "#1217", "#917",
-                                    "#835", "#798", "#637", "#346", "#58")] <- "MDR"
-df_long$amr[df_long$Study_ID %in% c("#3999", "#3992", "#3756", "#2771", "#914")] <- "MDR but incorrectly or more extensively defined"
+df_long$amr[df_long$Study_ID=="#6260" & df_long$Resistant_grp_definition=="MDRAB"] <- "MDR"
+df_long$amr[df_long$Study_ID %in% c("#8208", "#5509", "#4217", "#3114", "#2869", "#2480", "#2444", "#2122", "#1446", "#1412", "#1217", "#917",
+                                    "#835", "#798", "#637", "#346")] <- "MDR"
+df_long$amr[df_long$Study_ID %in% c("#3999", "#3992", "#3756", "#2771")] <- "MDR but incorrectly or more extensively defined"
 df_long$amr[df_long$Study_ID %in% c("#3847", "#3335", "#3189", "#2213", "#1984", "#1010", "#648", "#637", "#601", "#46")] <- "multiple AMR profiles combined"
-df_long$amr[df_long$Study_ID %in% c("#9333", "#7504", "#4938")] <- "resistance against multiple Watch antibiotics "
+df_long$amr[df_long$Study_ID %in% c("#9333", "#7504", "#4938")] <- "resistance against multiple Watch antibiotics"
 df_long$amr[df_long$Study_ID=="#69"] <- "multiple AMR profiles combined"
-df_long$amr[df_long$Resistant_grp_definition=="BSA-resistant (broad-spectrum antibiotic resistant) GNBSI"] <- "resistance against multiple Watch antibiotics "
-
+df_long$amr[df_long$Resistant_grp_definition=="BSA-resistant (broad-spectrum antibiotic resistant) GNBSI"] <- "resistance against multiple Watch antibiotics"
+df_long$amr[df_long$Study_ID=="#3959"] <- "multiple AMR profiles combined" # no specific R class, "resistant to the initial antibiotic treatment regimen [cefepime (n¼ 41; 50.0%), piperacillin-tazobactam (n¼ 25; 30.5%), or imipenem/meropenem (n¼ 16; 19.5%), plus either an aminoglycoside or ciprofloxacin (n¼ 28; 34.1%)]
+df_long$amr[df_long$Study_ID=="#3771"] <- "multiple AMR profiles combined" # no specific R class, all major MDRO, and all but one (ampicillin/sulbactam R) are Watch antibiotics
+df_long$amr[df_long$Study_ID=="#1995"] <- "resistance against multiple Watch antibiotics" # DTR, difficult to treat, all those mentioned are Watch
+df_long$amr[df_long$Study_ID=="#1007"] <- "resistance against multiple Watch antibiotics" # Antibiotic-resistant microorganisms (ARM) included the following: Enterobacterales resistant to third-generation cephalosporins (3GCREB) or carbapenems (CRE), Pseudomonas aeruginosa and other non-fermenting Gram-negative rods (NFGNB), Enterococcus faecium and glycopeptide-resistant enterococci (GRE), methicillinresistant Staphylococcus aureus (MRSA) and Candida”
+df_long$amr[df_long$Resistant_grp_definition=="PSBSI (persistent S. aureus in bloodstream infection)"] <- "methicillin resistance" 
+df_long$amr[df_long$Study_ID=="#1454"] <- "resistance against multiple Watch antibiotics" # "DTR was defined as nonsusceptibility (resistance or intermediate) to all tested agents in the carbapenem, β-lactam, and fluoroquinolone categories"
 table(df_long$amr, useNA = "always")
+table(df_long$amr[df_long$Study_ID=="#6441"], useNA = "always")
 
 # one study is entered twice as different AMR models, but are actually the same
 df_long <- df_long %>% filter(Study_ID!="#2444"|Resistant_grp_definition!="MDR BSI")
@@ -232,33 +243,31 @@ print(colnames(df_long), max = 1900)
 # clean isolated bacteria, and group them if possible, creating a new variable 'pathogengroup'
 df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
       # 1) CR-Enterobacterales
-    amr == "3rd gen cephalosporin resistance" &
-        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-Enterobacterales",  #KM - should be "carbapenem resistance instead of 3rd gen cephalosporin resistance
-      
+      (amr == "carbapenem resistance" | amr == "carbapenem + ampicillin/sulbactam resistance") &
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "carbapenem-resistant Enterobacterales",  #KM - should be "carbapenem resistance instead of 3rd gen cephalosporin resistance
       # 2) C3GR-Enterobacterales (including ESBL)
-      amr == "ESBL" & 
-        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3GR-Enterobacterales",  #KM - ESBL not part of amr categories
-      
+      amr == "3rd gen cephalosporin resistance" & 
+        grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3G-resistant Enterobacterales",  #KM - ESBL not part of amr categories
       # 3) MRSA
       amr == "methicillin resistance" & 
-        grepl("Staphylococcus aureus|MRSA|MSSA", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "MRSA",
-      
+        grepl("Staphylococcus aureus|MRSA|MSSA", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "mathicillin-resistant S. aureus",
       # 4) PRSP
       amr == "penicillin resistance" & 
-        grepl("Streptococcus pneumoniae|S\\. pneumoniae", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "PRSP",
-      
+        grepl("Streptococcus pneumoniae|S\\. pneumoniae", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "penicillin-resistant S.pneumoniae",
       # 5) CRAB
       amr == "carbapenem resistance" & 
-        grepl("Acinetobacter", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CRAB",
-      
+        grepl("Acinetobacter", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "carbapenem-resistant A.baumanii",
       # 6) CR-P. Aeruginosa
       amr == "carbapenem resistance" & 
-        grepl("Pseudomonas|P\\. Aeruginosa", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P. Aeruginosa",
-      
-      # 7) Other (default)
+        grepl("Pseudomonas|P\\. aeruginosa|P\\.aeruginosa", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P.aeruginosa",
+      # 7) VRE
+      amr == "vancomycin resistance" & 
+      grepl("E.faecium|E. faecium|Enterococcus|Enterococci|VRE", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P.aeruginosa",
+      # 8) Other (default)
       TRUE ~ "Other"))
 
 table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed # KM - table does not show any C3GR-Enterobacterales or PRSP
+checkbugdrug <- df_long %>% filter(pathogen_antibiotic_combination=="Other") %>% select(amr, Resistant_grp_definition, `Bacterial-isolate_type`, Study_ID)
 
 # create an even longer df, with one row per variable/exposure of interest reported
 df_long <- df_long %>% rename_with(~ str_replace_all(., "-(\\d+)_name", "_\\1")) # make sure all variable names belonging to the same indicator have the same number at the end
@@ -267,12 +276,12 @@ df_long <- df_long %>% mutate(across(contains("resistant_group mean_"), as.chara
 df_long <- df_long %>% mutate(across(contains("resistant_group SD_"), as.character))
 df_long <- df_long %>% mutate(across(contains("resistant_group p-value_"), as.character))
 df_long <- df_long %>% mutate(across(contains("resistant_group median_"), as.character))
-df_long <- df_long %>% mutate(across(contains("compartor_group mean_"), as.character))
+df_long <- df_long %>% mutate(across(contains("comparator_group mean_"), as.character))
 df_long <- df_long %>% mutate(across(contains("comparator_group SD_"), as.character))
 df_long <- df_long %>% mutate(across(contains("comparator_group p-value_"), as.character))
-df_long <- df_long %>% mutate(across(contains("compartor_group median_"), as.character))
 df_long <- df_long %>% mutate(across(contains("comparator_group median_"), as.character))
-df_long <- df_long %>% mutate(across(contains("compartor_group SD_"), as.character))
+df_long <- df_long %>% mutate(across(contains("comparator_group median_"), as.character))
+df_long <- df_long %>% mutate(across(contains("comparator_group SD_"), as.character))
 
 # DESCRIPTIVE_continuous_proxy-indicators -> exclude columns beyond the first proxy-indicators part of the data extraction table (up to the notes of proxy indicator 20)
 continuous_df <- df_long %>% 
@@ -288,6 +297,11 @@ colnames(continuous_df)
 
 # get rid of empty rows (per study model, up to 20 indicators reported, but usually les, so many rows are empty)
 continuous_df <- continuous_df %>% filter(!is.na(`resistant_group definition`))
+
+# # check if for a study with multiple indicators reported, the definitions and values are correct (they first didn't because of a typo in a column name in the raw data)
+# df %>% filter(Study_ID=="#12384") %>% select(`resistant_group mean_1`, `susceptible_comparator_group mean_1`)
+# df %>% filter(Study_ID=="#12384") %>% select(`resistant_group mean_2`, `susceptible_comparator_group mean_2`)
+# continuous_df %>% filter(Study_ID=="#12384") %>% select(`resistant_group variable`, `resistant_group mean`, `susceptible_comparator_group mean`)
 
 #export list of ALL continuous proxy indicators keeping unique indicator names. Initial Export with ghost lines, remove space
 write_xlsx(
@@ -892,6 +906,7 @@ categorical_df <- categorical_df %>% mutate(across(contains("Proportion Resistan
 categorical_df <- categorical_df %>% mutate(across(contains("Proportion Susceptible_comparator_group_value_"), as.character)) # same format of variables that are combined in the longer df
 categorical_df <- categorical_df %>% mutate(across(contains("Proportion Total_"), as.character)) # same format of variables that are combined in the longer df
 categorical_df <- categorical_df %>% mutate(across(contains("Proportion p-value_"), as.character)) # same format of variables that are combined in the longer df
+categorical_df <- categorical_df %>% mutate(across(contains("95%CI Resistant_group_value_"), as.character)) # same format of variables that are combined in the longer df
 
 categorical_df <- categorical_df %>%  pivot_longer(
   cols = matches("_(?:[1-9]|1[0-9]|2[0-9]|3[0-8])$"),   # matches _1 to _38
