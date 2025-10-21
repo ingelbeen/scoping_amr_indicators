@@ -193,6 +193,7 @@ df_long <- df_long %>%  mutate(amr = case_when(
       grepl("Ampicillin and gentamicin", Resistant_grp_definition, ignore.case = TRUE) ~ "ampicillin + gentamycin resistance",
       grepl("SNS", Resistant_grp_definition, ignore.case = TRUE) ~ "sulbactam non susceptible",
       grepl("LNZ", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
+      grepl("Ampicillin-resistant Enterococcus faecalis", Resistant_grp_definition, ignore.case = TRUE) ~ "ampicillin resistant",
       grepl("LIN-R", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
       grepl("linezolid-resistant", Resistant_grp_definition, ignore.case = TRUE) ~ "linezolid non susceptible/resistant",
       grepl("imipenem-res", Resistant_grp_definition, ignore.case = TRUE) ~ "carbapenem resistance",
@@ -211,7 +212,7 @@ df_long$amr[df_long$Study_ID=="#6260" & df_long$Resistant_grp_definition=="MDRAB
 df_long$amr[df_long$Study_ID %in% c("#8208", "#5509", "#4217", "#3114", "#2869", "#2480", "#2444", "#2122", "#1446", "#1412", "#1217", "#917",
                                     "#835", "#798", "#637", "#346")] <- "MDR"
 df_long$amr[df_long$Study_ID %in% c("#3999", "#3992", "#3756", "#2771")] <- "MDR but incorrectly or more extensively defined"
-df_long$amr[df_long$Study_ID %in% c("#3847", "#3335", "#3189", "#2213", "#1984", "#1010", "#648", "#637", "#601", "#46")] <- "multiple AMR profiles combined"
+df_long$amr[df_long$Study_ID %in% c("#3335", "#3189", "#2213", "#1984", "#1010", "#648", "#637", "#601", "#46")] <- "multiple AMR profiles combined"
 df_long$amr[df_long$Study_ID %in% c("#9333", "#7504", "#4938")] <- "resistance against multiple Watch antibiotics"
 df_long$amr[df_long$Study_ID=="#69"] <- "multiple AMR profiles combined"
 df_long$amr[df_long$Resistant_grp_definition=="BSA-resistant (broad-spectrum antibiotic resistant) GNBSI"] <- "resistance against multiple Watch antibiotics"
@@ -222,7 +223,8 @@ df_long$amr[df_long$Study_ID=="#1007"] <- "resistance against multiple Watch ant
 df_long$amr[df_long$Resistant_grp_definition=="PSBSI (persistent S. aureus in bloodstream infection)"] <- "methicillin resistance" 
 df_long$amr[df_long$Study_ID=="#1454"] <- "resistance against multiple Watch antibiotics" # "DTR was defined as nonsusceptibility (resistance or intermediate) to all tested agents in the carbapenem, β-lactam, and fluoroquinolone categories"
 table(df_long$amr, useNA = "always")
-table(df_long$amr[df_long$Study_ID=="#6441"], useNA = "always")
+df_long$amr[grepl("Resistance", df_long$Resistant_grp_definition)==T&df_long$Study_ID=="#3847"] <- "multiple AMR profiles combined"
+df_long$amr[grepl("3GC-R", df_long$Resistant_grp_definition)==T&df_long$Study_ID=="#3847"] <- "3rd gen cephalosporin resistance"
 
 # one study is entered twice as different AMR models, but are actually the same
 df_long <- df_long %>% filter(Study_ID!="#2444"|Resistant_grp_definition!="MDR BSI")
@@ -255,7 +257,7 @@ df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
       amr == "penicillin resistance" & 
         grepl("Streptococcus pneumoniae|S\\. pneumoniae", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "penicillin-resistant S.pneumoniae",
       # 5) CRAB
-      amr == "carbapenem resistance" & 
+      (amr == "carbapenem resistance"|amr == "carbapenem + ampicillin/sulbactam resistance")& # I now added the CASR amr profile too, since largely overlapping, but to CHECK
         grepl("Acinetobacter", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "carbapenem-resistant A.baumanii",
       # 6) CR-P. Aeruginosa
       amr == "carbapenem resistance" & 
@@ -264,7 +266,7 @@ df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
       amr == "vancomycin resistance" & 
       grepl("E.faecium|E. faecium|Enterococcus|Enterococci|VRE", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P.aeruginosa",
       # 8) Other (default)
-      TRUE ~ "Other"))
+      TRUE ~ "Other/combination of multiple pathogens"))
 
 table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed # KM - table does not show any C3GR-Enterobacterales or PRSP
 checkbugdrug <- df_long %>% filter(pathogen_antibiotic_combination=="Other") %>% select(amr, Resistant_grp_definition, `Bacterial-isolate_type`, Study_ID)
