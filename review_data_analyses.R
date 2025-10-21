@@ -252,7 +252,7 @@ df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
         grepl("Escherichia coli|E\\. coli|Klebsiella|Enterobacter|Salmonella", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "C3G-resistant Enterobacterales",  #KM - ESBL not part of amr categories
       # 3) MRSA
       amr == "methicillin resistance" & 
-        grepl("Staphylococcus aureus|MRSA|MSSA", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "mathicillin-resistant S. aureus",
+        grepl("Staphylococcus aureus|MRSA|MSSA", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "methicillin-resistant S. aureus",
       # 4) PRSP
       amr == "penicillin resistance" & 
         grepl("Streptococcus pneumoniae|S\\. pneumoniae", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "penicillin-resistant S.pneumoniae",
@@ -261,12 +261,12 @@ df_long <- df_long %>% mutate(pathogen_antibiotic_combination = case_when(
         grepl("Acinetobacter", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "carbapenem-resistant A.baumanii",
       # 6) CR-P. Aeruginosa
       amr == "carbapenem resistance" & 
-        grepl("Pseudomonas|P\\. aeruginosa|P\\.aeruginosa", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P.aeruginosa",
+        grepl("Pseudomonas|P\\. aeruginosa|P\\.aeruginosa", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "carbapenem-resistant P.aeruginosa",
       # 7) VRE
       amr == "vancomycin resistance" & 
-      grepl("E.faecium|E. faecium|Enterococcus|Enterococci|VRE", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "CR-P.aeruginosa",
+      grepl("E.faecium|E. faecium|Enterococcus|Enterococci|VRE", `Bacterial-isolate_type`, ignore.case = TRUE) ~ "vancomycin-resistant Enterococci",
       # 8) Other (default)
-      TRUE ~ "Other/combination of multiple pathogens"))
+      TRUE ~ "other/combination of multiple pathogens"))
 
 table(df_long$pathogen_antibiotic_combination) # need to check the 152 Other if not any missed # KM - table does not show any C3GR-Enterobacterales or PRSP
 checkbugdrug <- df_long %>% filter(pathogen_antibiotic_combination=="Other") %>% select(amr, Resistant_grp_definition, `Bacterial-isolate_type`, Study_ID)
@@ -729,149 +729,147 @@ datatable(
 
 
 
-#BI - initial code - continuous indicators
-# create categories to group reported indicators -> continuous indicators reported in "resistant_group variable"
-continuous_df <- continuous_df %>%  mutate(indicatorcategory = case_when(
-  str_detect(`resistant_group variable`, regex("age.*years", ignore_case = TRUE)) ~ "Age",
-  str_detect(`resistant_group variable`, regex("gestation|birthweight|crib", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
-  str_detect(`resistant_group variable`, regex("apache|mccabe|sofa|pitt|pneumonia severity index|psis|saps|Severity grade", ignore_case = TRUE)) ~ "Clinical severity score",
-  #    str_detect(`resistant_group variable`, regex("hospital stay", ignore_case = TRUE)) ~ "Prior hospital stay (categorical)",
-  str_detect(`resistant_group variable`, regex("duration of hospitalization prior to having bacteremia|hospital stay.*days|Length of stay|LOS,days|Length of hospital|Time from admission|Length of hospital stay, total days|Days of admission before infection", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)",
-  str_detect(`resistant_group variable`, regex("Time at risk|Days from admission to positive culture|Days from hospital admission to BSI|Total LOS|Duration of time from hospital admission to positive blood culture", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)",
-  str_detect(`resistant_group variable`, regex("LOS in preceding yr|Total days of hospitalization in the 6 months prior to current hospitalization|Admission days prior to index culture|Index hospital stay|Sequential time to positivity|Time to positivity ratio", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)", # double check Sequential time to positivity and Time to positivity ratio
-  str_detect(`resistant_group variable`, regex("ICU", ignore_case = TRUE)) ~ "Prior ICU stay (categorical)",
-  str_detect(`resistant_group variable`, regex("ICU stay days", ignore_case = TRUE)) ~ "Prior ICU stay (ordinal)",
-  str_detect(`resistant_group variable`, regex("Quantitative indices of antibiotic usage|Total antibiotic treatment|Antibiotic-days|Duration of exposure to antimicrobial agent, days", ignore_case = TRUE)) ~ "Antibiotic exposure: duration (numeric)", # check Total antibiotic treatment
-  str_detect(`resistant_group variable`, regex("DDDs|Days of extended-spectrum|Days of third-|Days of carbapenem|Days of aminoglyc|Total days of antibiotic", ignore_case = TRUE)) ~ "Antibiotic exposure: duration (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
-  str_detect(`resistant_group variable`, regex("number of different antibiotics used|no. of prior antibiotics", ignore_case = TRUE)) ~ "Antibiotic exposure: different antibiotics (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
-  str_detect(`resistant_group variable`, regex("Therapy with antibiotics prior 30 days of infection - |Types of antibiotics", ignore_case = TRUE)) ~ "Antibiotic exposure (categorical)",
-  str_detect(`resistant_group variable`, regex("LOS from culture to discharge|Survival time|time to first negative blood culture|Survival|LOS after bacteremia|antibiotic administration postculture", ignore_case = TRUE)) ~ "Patient outcomes", # still check if survival is defined as time until death or time until discharge 
-  `resistant_group variable`== "Hospital days" ~ "Patient outcomes", # there's a note that states it is likely total admission, and not just prior or after BSI
-  str_detect(`resistant_group variable`, regex("charlson|absi|no. of comorbidities", ignore_case = TRUE)) ~ "Comorbidity score",
-  str_detect(`resistant_group variable`, regex("absi", ignore_case = TRUE)) ~ "Burn severity",
-  str_detect(`resistant_group variable`, regex("ntiss| feeding tube", ignore_case = TRUE)) ~ "Invasive procedures",
-  str_detect(`resistant_group variable`, regex("temperatu|blood pressure|apgar", ignore_case = TRUE)) ~ "Vital signs", # apgar score is largely based on vital signs
-  str_detect(`resistant_group variable`, regex("creatinine|bilirubin|cholinest|total protein|albumin|LDH|CKMB|urea nitrogen|uric acid", ignore_case = TRUE)) ~ "Kidney/liver lab values",
-  str_detect(`resistant_group variable`, regex("monocyte|neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Blood lab values",
-  str_detect(`resistant_group variable`, regex("tnf|procalciton|crp", ignore_case = TRUE)) ~ "Inflammatory lab values",
-  str_detect(`resistant_group variable`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
-  str_detect(`resistant_group variable`, regex("comorbidity|diabetes|cirrhosis|hypertens|Liver Disease", ignore_case = TRUE)) ~ "NCD",
-  str_detect(`resistant_group variable`, regex("cost|economic|burden|usd|eur|cny|sgd|jpy", ignore_case = TRUE)) ~ "Costs / economic",
-  str_detect(`resistant_group variable`, regex("days to active therapy|duration from bacteremia to receiving appropriate antibiotic|Hours to appropriate therapy", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
-  str_detect(`resistant_group variable`, regex("Time to appropriate therapy|Time to adequate antibiotic therapy|Overall time to first dose of appropriate antibiotic therapy", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
-  str_detect(`resistant_group variable`, regex("Hours to active antibiotic therapy|Time to microbiologically appropriate antibiotic therapy|no. of days to active", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
-  # for the remaining (which could not be assigned to one of the groups, or were wrongly categorised), enter the exact string 
-  `resistant_group variable` %in% c(
-    "Days of hospital stay", # to check if as outcome or as exposure
-    "hospital stay", # to check if as outcome or as exposure
-    "Overall - Hospital days before bacteremia",
-    "Hospital days before bacteremia",
-    "days hospitalization", # to check if as outcome or as exposure
-    "duration of hospitalization (days)",
-    "LOS prior to isolation of GNB, days",
-    "LOS before blood culture (days)",
-    "Number of hospitalization days in the 3 months before bacteremia",
-    "Overall admission, days", # to check if as outcome or as exposure
-    "Time between hospital admission and BSI onset (days)",
-    "time from hospitalisation to KPBSI (days)",
-    "Admission days till bacteraemia",
-    "Duration of hospitalization before bacteremia (days)",
-    "no. of days of hospital residency prior to\r\nculture"
-  ) ~ "Duration hospital stay before BSI (ordinal)",
-  `resistant_group variable` %in% c(
-    "no. of days to active therapy",
-    "no. of days to active\r\ntherapy ",
-    "Days to appropriate therapy",
-    "Appropriate antimicrobial therapy within 2 days",
-    "Appropriate antimicrobial therapy within 3 days",
-    "Clinical course and outcomes - Time to appropriate treatment in days"
-  ) ~ "Duration to appropriate therapy (ordinal)",
-  `resistant_group variable` %in% c(
-    "Prior no. of days of antibiotic therapy",
-    "Patients with previous antibiotic treatment - Days on antimicrobial treatment",
-    "Exposure to antibiotics-Antibiotic days",
-    "Fluoroquinolone therapy (days)",
-    "Piperacillin-tazobactam (days)",
-    "Meropenem (days)",
-    "Vancomycin (days)",
-    "duration of antibiotic therapy (days)",
-    "Duration of previous antibiotic use (days)",
-    "Previous antibiotic duration (days)",
-    "Duration of therapy (days)",
-    "Combined treatment days", # to check if as outcome or as exposure
-    "Length of use (days)", # unclear if as outcome or as exposure
-    "Antibiotic use with carbapenem in previous 84 days",
-    "Quantitative indices of antibiotic usage - Antibiotic-days/patient"
-  ) ~ "Antibiotic exposure: duration (numeric)",
-  `resistant_group variable` %in% c(
-    "Patients with previous antibiotic treatment - Types of antimicrobials",
-    "Patients with previous antibiotic treatment - Antimicrobial families",
-    "Patients with previous antibiotic treatment - Different antimicrobial families",
-    "Quantitative indices of antibiotic usage - number of different antibiotics used/patient",
-    "All patients - Types of antimicrobials",
-    "All patients - Different antimicrobial families",
-    "Number of antibiotic agent"
-  ) ~ "Antibiotic exposure: different antibiotics (numeric)",
-  `resistant_group variable` %in% c(
-    "Days of positive blood culture",
-    "time to resolution of BSI - days (first of the 2 consecutively negative blood cultures after infection) - Pediatric patients",
-    "Duration of bacteremia (days)",
-    "Duration of Bacteremia, days",
-    "Duration of bacteremia",
-    "Only patients who had hospital-acquired bacteremia - time to bacteremia from admission date",
-    "Number of sets of positive blood cultures",
-    "LOS after GNB bacteremia, days",
-    "LOS after BSI, days",
-    "Hospital stay after diagnosis",
-    "Hospital stay after bacteremia",
-    "Post Infection LOS (>30 day survivors)",
-    "duration of hospital stay postinfection for survivors",
-    "no. of days of hospital stay postinfection for survivors",
-    "no. of days of hospital\r\nstay postinfection for survivors",
-    "no. of days of antibiotic administration postculture",
-    "no. of days of\r\nantibiotic administration\r\npostculture",
-    "hospital days among patients who did not receive effective empirical antibiotic treatment"
-  ) ~ "Patient outcomes",
-  `resistant_group variable` %in% c(
-    "Leukocytes (cells/mm3)",
-    "Laboratory examination - White blood cell"
-  ) ~ "Blood lab values",
-  `resistant_group variable` %in% c(
-    "Predisposing factors - CD4 count, cells/ml",
-    "Chronic Liver Failure-Consortium Acute-on-Chronic Liver Failure (CLIF-C ACLF)",
-    "BMI",
-    "Organ failure at admission",
-    "Model of End-Stage Liver Disease-Na"
-  ) ~ "Comorbidity score",
-  `resistant_group variable` %in% c(
-    "Total numbers of invasive procedures",
-    "Length of mechanical ventilation at onset of bacteraemia",
-    "Time to start enteral feeds (days)",
-    "Duration of central venous device (days)",
-    "Mechanical ventilation duration (days)",
-    "Encounter-specific risk factors (prior to development of bacteraemia) - Urinary catheter, days",
-    "Arterial catheter (AC) - Overall duration of AC"
-  ) ~ "Invasive procedures",
-  `resistant_group variable` %in% c(
-    "Outcome - alive (days)",
-    "Days to discharge",
-    "Duration of Follow-Up, patient days",
-    "Duration of Fever after Hospital Admission, days"
-  ) ~ "Patient outcomes",
-  `resistant_group variable` %in% c(
-    "Disseminated intravascular coagulation (DIC) score"
-  ) ~ "Clinical severity score",
-  `resistant_group variable` %in% c("Age", "Age (yr)", "Age (yrs)", "Age (months)", "Age at onset of LOS (days)") ~ "Age",
-  `resistant_group variable` %in% c("weight-for-age z-score") ~ "Preterm birth/low birth weight",
-  `resistant_group variable` %in% c("Days since last hospitalization",
-                                    "Duration of Symptoms on Presentation, days", # surprised there are not more of this
-                                    "days to death after admission",
-                                    "Monotherapy - daptomycin dose (mg/kg)" # check if this could be a separate category - surprisingly seems to be the only dose/dosage metric
-  ) ~ "Other",
-  `resistant_group variable` %in% c("Infection or colonization of K. pneumoniae in previous 84 days") ~ "Prior infection/colonisation",
-  TRUE ~ "Other"))
-
-table(continuous_df$`resistant_group variable`[continuous_df$indicatorcategory=="Other"]) # the remaning "Other" seem fine now, each reported just once
+# #BI - initial code - continuous indicators
+# # create categories to group reported indicators -> continuous indicators reported in "resistant_group variable"
+# continuous_df <- continuous_df %>%  mutate(indicatorcategory = case_when(
+#   str_detect(`resistant_group variable`, regex("age.*years", ignore_case = TRUE)) ~ "Age",
+#   str_detect(`resistant_group variable`, regex("gestation|birthweight|crib", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
+#   str_detect(`resistant_group variable`, regex("apache|mccabe|sofa|pitt|pneumonia severity index|psis|saps|Severity grade", ignore_case = TRUE)) ~ "Clinical severity score",
+#   #    str_detect(`resistant_group variable`, regex("hospital stay", ignore_case = TRUE)) ~ "Prior hospital stay (categorical)",
+#   str_detect(`resistant_group variable`, regex("duration of hospitalization prior to having bacteremia|hospital stay.*days|Length of stay|LOS,days|Length of hospital|Time from admission|Length of hospital stay, total days|Days of admission before infection", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)",
+#   str_detect(`resistant_group variable`, regex("Time at risk|Days from admission to positive culture|Days from hospital admission to BSI|Total LOS|Duration of time from hospital admission to positive blood culture", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)",
+#   str_detect(`resistant_group variable`, regex("LOS in preceding yr|Total days of hospitalization in the 6 months prior to current hospitalization|Admission days prior to index culture|Index hospital stay|Sequential time to positivity|Time to positivity ratio", ignore_case = TRUE)) ~ "Duration hospital stay before BSI (ordinal)", # double check Sequential time to positivity and Time to positivity ratio
+#   str_detect(`resistant_group variable`, regex("ICU", ignore_case = TRUE)) ~ "Prior ICU stay (categorical)",
+#   str_detect(`resistant_group variable`, regex("ICU stay days", ignore_case = TRUE)) ~ "Prior ICU stay (ordinal)",
+#   str_detect(`resistant_group variable`, regex("Quantitative indices of antibiotic usage|Total antibiotic treatment|Antibiotic-days|Duration of exposure to antimicrobial agent, days", ignore_case = TRUE)) ~ "Antibiotic exposure: duration (numeric)", # check Total antibiotic treatment
+#   str_detect(`resistant_group variable`, regex("DDDs|Days of extended-spectrum|Days of third-|Days of carbapenem|Days of aminoglyc|Total days of antibiotic", ignore_case = TRUE)) ~ "Antibiotic exposure: duration (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
+#   str_detect(`resistant_group variable`, regex("number of different antibiotics used|no. of prior antibiotics", ignore_case = TRUE)) ~ "Antibiotic exposure: different antibiotics (numeric)", # might have to break up between dose (daptomycin) and duration, also check Total antibiotic treatment
+#   str_detect(`resistant_group variable`, regex("Therapy with antibiotics prior 30 days of infection - |Types of antibiotics", ignore_case = TRUE)) ~ "Antibiotic exposure (categorical)",
+#   str_detect(`resistant_group variable`, regex("LOS from culture to discharge|Survival time|time to first negative blood culture|Survival|LOS after bacteremia|antibiotic administration postculture", ignore_case = TRUE)) ~ "Patient outcomes", # still check if survival is defined as time until death or time until discharge 
+#   `resistant_group variable`== "Hospital days" ~ "Patient outcomes", # there's a note that states it is likely total admission, and not just prior or after BSI
+#   str_detect(`resistant_group variable`, regex("charlson|absi|no. of comorbidities", ignore_case = TRUE)) ~ "Comorbidity score",
+#   str_detect(`resistant_group variable`, regex("absi", ignore_case = TRUE)) ~ "Burn severity",
+#   str_detect(`resistant_group variable`, regex("ntiss| feeding tube", ignore_case = TRUE)) ~ "Invasive procedures",
+#   str_detect(`resistant_group variable`, regex("temperatu|blood pressure|apgar", ignore_case = TRUE)) ~ "Vital signs", # apgar score is largely based on vital signs
+#   str_detect(`resistant_group variable`, regex("creatinine|bilirubin|cholinest|total protein|albumin|LDH|CKMB|urea nitrogen|uric acid", ignore_case = TRUE)) ~ "Kidney/liver lab values",
+#   str_detect(`resistant_group variable`, regex("monocyte|neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Blood lab values",
+#   str_detect(`resistant_group variable`, regex("tnf|procalciton|crp", ignore_case = TRUE)) ~ "Inflammatory lab values",
+#   str_detect(`resistant_group variable`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
+#   str_detect(`resistant_group variable`, regex("comorbidity|diabetes|cirrhosis|hypertens|Liver Disease", ignore_case = TRUE)) ~ "NCD",
+#   str_detect(`resistant_group variable`, regex("cost|economic|burden|usd|eur|cny|sgd|jpy", ignore_case = TRUE)) ~ "Costs / economic",
+#   str_detect(`resistant_group variable`, regex("days to active therapy|duration from bacteremia to receiving appropriate antibiotic|Hours to appropriate therapy", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
+#   str_detect(`resistant_group variable`, regex("Time to appropriate therapy|Time to adequate antibiotic therapy|Overall time to first dose of appropriate antibiotic therapy", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
+#   str_detect(`resistant_group variable`, regex("Hours to active antibiotic therapy|Time to microbiologically appropriate antibiotic therapy|no. of days to active", ignore_case = TRUE)) ~ "Duration to appropriate therapy (ordinal)",
+#   # for the remaining (which could not be assigned to one of the groups, or were wrongly categorised), enter the exact string 
+#   `resistant_group variable` %in% c(
+#     "Days of hospital stay", # to check if as outcome or as exposure
+#     "hospital stay", # to check if as outcome or as exposure
+#     "Overall - Hospital days before bacteremia",
+#     "Hospital days before bacteremia",
+#     "days hospitalization", # to check if as outcome or as exposure
+#     "duration of hospitalization (days)",
+#     "LOS prior to isolation of GNB, days",
+#     "LOS before blood culture (days)",
+#     "Number of hospitalization days in the 3 months before bacteremia",
+#     "Overall admission, days", # to check if as outcome or as exposure
+#     "Time between hospital admission and BSI onset (days)",
+#     "time from hospitalisation to KPBSI (days)",
+#     "Admission days till bacteraemia",
+#     "Duration of hospitalization before bacteremia (days)",
+#     "no. of days of hospital residency prior to\r\nculture"
+#   ) ~ "Duration hospital stay before BSI (ordinal)",
+#   `resistant_group variable` %in% c(
+#     "no. of days to active therapy",
+#     "no. of days to active\r\ntherapy ",
+#     "Days to appropriate therapy",
+#     "Appropriate antimicrobial therapy within 2 days",
+#     "Appropriate antimicrobial therapy within 3 days",
+#     "Clinical course and outcomes - Time to appropriate treatment in days"
+#   ) ~ "Duration to appropriate therapy (ordinal)",
+#   `resistant_group variable` %in% c(
+#     "Prior no. of days of antibiotic therapy",
+#     "Patients with previous antibiotic treatment - Days on antimicrobial treatment",
+#     "Exposure to antibiotics-Antibiotic days",
+#     "Fluoroquinolone therapy (days)",
+#     "Piperacillin-tazobactam (days)",
+#     "Meropenem (days)",
+#     "Vancomycin (days)",
+#     "duration of antibiotic therapy (days)",
+#     "Duration of previous antibiotic use (days)",
+#     "Previous antibiotic duration (days)",
+#     "Duration of therapy (days)",
+#     "Combined treatment days", # to check if as outcome or as exposure
+#     "Length of use (days)", # unclear if as outcome or as exposure
+#     "Antibiotic use with carbapenem in previous 84 days",
+#     "Quantitative indices of antibiotic usage - Antibiotic-days/patient"
+#   ) ~ "Antibiotic exposure: duration (numeric)",
+#   `resistant_group variable` %in% c(
+#     "Patients with previous antibiotic treatment - Types of antimicrobials",
+#     "Patients with previous antibiotic treatment - Antimicrobial families",
+#     "Patients with previous antibiotic treatment - Different antimicrobial families",
+#     "Quantitative indices of antibiotic usage - number of different antibiotics used/patient",
+#     "All patients - Types of antimicrobials",
+#     "All patients - Different antimicrobial families",
+#     "Number of antibiotic agent"
+#   ) ~ "Antibiotic exposure: different antibiotics (numeric)",
+#   `resistant_group variable` %in% c(
+#     "Days of positive blood culture",
+#     "time to resolution of BSI - days (first of the 2 consecutively negative blood cultures after infection) - Pediatric patients",
+#     "Duration of bacteremia (days)",
+#     "Duration of Bacteremia, days",
+#     "Duration of bacteremia",
+#     "Only patients who had hospital-acquired bacteremia - time to bacteremia from admission date",
+#     "Number of sets of positive blood cultures",
+#     "LOS after GNB bacteremia, days",
+#     "LOS after BSI, days",
+#     "Hospital stay after diagnosis",
+#     "Hospital stay after bacteremia",
+#     "Post Infection LOS (>30 day survivors)",
+#     "duration of hospital stay postinfection for survivors",
+#     "no. of days of hospital stay postinfection for survivors",
+#     "no. of days of hospital\r\nstay postinfection for survivors",
+#     "no. of days of antibiotic administration postculture",
+#     "no. of days of\r\nantibiotic administration\r\npostculture",
+#     "hospital days among patients who did not receive effective empirical antibiotic treatment"
+#   ) ~ "Patient outcomes",
+#   `resistant_group variable` %in% c(
+#     "Leukocytes (cells/mm3)",
+#     "Laboratory examination - White blood cell"
+#   ) ~ "Blood lab values",
+#   `resistant_group variable` %in% c(
+#     "Predisposing factors - CD4 count, cells/ml",
+#     "Chronic Liver Failure-Consortium Acute-on-Chronic Liver Failure (CLIF-C ACLF)",
+#     "BMI",
+#     "Organ failure at admission",
+#     "Model of End-Stage Liver Disease-Na"
+#   ) ~ "Comorbidity score",
+#   `resistant_group variable` %in% c(
+#     "Total numbers of invasive procedures",
+#     "Length of mechanical ventilation at onset of bacteraemia",
+#     "Time to start enteral feeds (days)",
+#     "Duration of central venous device (days)",
+#     "Mechanical ventilation duration (days)",
+#     "Encounter-specific risk factors (prior to development of bacteraemia) - Urinary catheter, days",
+#     "Arterial catheter (AC) - Overall duration of AC"
+#   ) ~ "Invasive procedures",
+#   `resistant_group variable` %in% c(
+#     "Outcome - alive (days)",
+#     "Days to discharge",
+#     "Duration of Follow-Up, patient days",
+#     "Duration of Fever after Hospital Admission, days"
+#   ) ~ "Patient outcomes",
+#   `resistant_group variable` %in% c(
+#     "Disseminated intravascular coagulation (DIC) score"
+#   ) ~ "Clinical severity score",
+#   `resistant_group variable` %in% c("Age", "Age (yr)", "Age (yrs)", "Age (months)", "Age at onset of LOS (days)") ~ "Age",
+#   `resistant_group variable` %in% c("weight-for-age z-score") ~ "Preterm birth/low birth weight",
+#   `resistant_group variable` %in% c("Days since last hospitalization",
+#                                     "Duration of Symptoms on Presentation, days", # surprised there are not more of this
+#                                     "days to death after admission",
+#                                     "Monotherapy - daptomycin dose (mg/kg)" # check if this could be a separate category - surprisingly seems to be the only dose/dosage metric
+#   ) ~ "Other",
+#   `resistant_group variable` %in% c("Infection or colonization of K. pneumoniae in previous 84 days") ~ "Prior infection/colonisation",
+#   TRUE ~ "Other"))
 
 # display all numerical indicators
 numindicators <- continuous_df %>%
@@ -892,12 +890,11 @@ continuous_dfshort <- continuous_df %>% select(`Study ID`, Study_ID, Study_count
   distinct()
 
 # DESCRIPTIVE_dichotomous_proxy-indicators -> reshape the second part of df_long in a longer format, in which all variables containing the categorical indicators Number_1, Number_2, etc. are brought together in the same variable
-print(colnames(df_long), max = 1900)
-# check if the order of descriptive dichotomous and the univariate dichotomous variables correspond
-check <- df_long %>% group_by(`Proportion_1 Variable_description`, `Number_1 Variable_description`, `Predictor_1 Definition...1468`, `Predictor_1 Definition...1717`) %>% summarise((n=n()))
+# # check if the order of descriptive dichotomous and the univariate dichotomous variables correspond
+# check <- df_long %>% group_by(`Proportion_1 Variable_description`, `Number_1 Variable_description`, `Predictor_1 Definition...1468`, `Predictor_1 Definition...1717`) %>% summarise((n=n()))
 
 categorical_df <- df_long %>% 
-  select(1:32, 394:965, amr, Model, Resistant_group_tot_nb, Susceptible_group_tot_nb)
+  select(1:32, studypop, highrisk, amr, pathogen_antibiotic_combination, 394:965, Model, Resistant_group_tot_nb, Susceptible_group_tot_nb)
 
 categorical_df <- categorical_df %>%
   rename_with(~ str_replace(.x, "^(Number|Proportion|95%CI)_(\\d+) (.*)$", "\\1 \\3_\\2")) # put the sequential numbers at the end
@@ -916,7 +913,7 @@ categorical_df <- categorical_df %>%  pivot_longer(
   names_pattern = "(.*)_(\\d+)$")
 colnames(categorical_df)
 
-# get rid of empty rows (per study model, up to 38 indicators reported, but usually les, so many rows are empty)
+# get rid of empty rows (per study model up to 38 indicators reported. for most studies less, so many rows are empty)
 categorical_df <- categorical_df %>% filter(!is.na(`Number Variable_description`))
 
 # regroup the categorical exposures of interest/indicators in `Proportion Variable_description` -> NEED TO BE FURTHER CLEANED - some labels might be added that are mistakenly added
@@ -938,21 +935,28 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Thoracentesis|Tracheal|Cannula|Aspiration|Nutrition|pacemaker|catheter|surgery|surgical proced|caesarian|intubat|foley|catheter|central line|ventilator|surgery|invasive|hemodialys|mechanical ventilat|central venous line|gastric tube|parenteral nutrit", ignore_case = TRUE)) ~ "Invasive procedures",
       str_detect(`Proportion Variable_description`, regex("Device|Catheter|Intubation|Surgery|Operation|Bronchoscopy|Drain|Tube|Endoscopy|Tracheo|Puncture|Previous surgery ", ignore_case = TRUE)) ~ "Invasive procedures",
       str_detect(`Proportion Variable_description`, regex("leukocytes|lymphocytopenia|coagulation|low hemoglobin|low wbc|neutropenia|thrombocytopenia|Hypoproteinemia|monocyte|neutropenia|wbc|hemoglobin|neutrophil|platelet|International normalized ratio|Hb|Haematocr", ignore_case = TRUE)) ~ "Low blood values",
-      str_detect(`Proportion Variable_description`, regex("Requirement of blood transfusion(s)|sepsis|shock|severe|clinical severity", ignore_case = TRUE)) ~ "Clinical severity",
+      str_detect(`Proportion Variable_description`, regex("Requirement of blood transfusion(s)|sepsis|shock|clinical severity", ignore_case = TRUE)) ~ "Clinical severity",
       str_detect(`Proportion Variable_description`, regex("blood transfusion", ignore_case = TRUE)) ~ "Blood transfusion",
       str_detect(`Proportion Variable_description`, regex("burn", ignore_case = TRUE)) ~ "Burns",
       str_detect(`Proportion Variable_description`, regex("crp|procalcitonin|biomarker", ignore_case = TRUE)) ~ "Biomarker positive",
       str_detect(`Proportion Variable_description`, regex("diabetes|hypertension|copd|asthma", ignore_case = TRUE)) ~ "NCDs",
       str_detect(`Proportion Variable_description`, regex("solid organ tumor|comorbidity|cancer|renal|liver|hiv|malignancy|dementia|hemipleg|congestive heart failur|myocardial infarc|chronic neurological|vascular disease", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("Chronic|Underlying|Comorbid|Charlson|NCD|Kidney|Cardiac|Tumou?r|Neoplasia|Pulmonary|Rheumatic|Immunosuppress|Autoimmune|Malignant|Comorbid|Cancer", ignore_case = TRUE)) ~ "Comorbidities",
+      str_detect(`Proportion Variable_description`, regex("Severe underweight-for-age|severe underweight for age", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn", ignore_case = TRUE)) ~ "Young age",
       str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("resistant|susceptible|intermediate|isolated|Resistance to | resistance", ignore_case = TRUE)) ~ "Resistance profile",
-      str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
-      str_detect(`Proportion Variable_description`, regex("Antibiotic|Antimicrobial|therapy|Previous .*therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
       str_detect(`Proportion Variable_description`, regex("ESBL|MDR|Resistance|Susceptibility|Resistant", ignore_case = TRUE)) ~ "Resistance profile",
+      `Proportion Variable_description` %in% c("Outcome parameters - Appropriate therapy administered in <48 h") ~ "Duration to appropriate therapy (binary)",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("duration|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE))) ~ "Prior antibiotic exposure, duration",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("inappropriate|inadequate|incorrect|failure|wrong", ignore_case = TRUE))) ~ "Prior antibiotic exposure, inappropriate choice",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|Previous .*therapy", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE))) ~ "Prior antibiotic exposure, specific choice",
+
+      str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|Previous .*therapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, overall",
+      # str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
+      str_detect(`Proportion Variable_description`, regex("corticoid|steroid|Previous .*therapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, overall",
       str_detect(`Proportion Variable_description`, regex("male|women", ignore_case = TRUE)) ~ "Sex",
       `Proportion Variable_description` %in% c("men", "Men", "Sex - men") ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("Outcome - Survival|mortality|death|fatality|30-day outcome|7-day clinical treatment failure|clinical cure", ignore_case = TRUE)) ~ "Patient outcomes",
@@ -967,16 +971,12 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Region|Residence|Insurance|Income", ignore_case = TRUE)) ~ "Geography",
       TRUE ~ "Other"
     ))
+# indicator added both as 'yes' and 'no'
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Shock - No")
+
+
 table(categorical_df$indicatorcategory)
-
-# display all categorical indicators
-catindicators <- categorical_df %>%
-  filter(!is.na(`Proportion Variable_description`)) %>%
-  select(`Proportion Variable_description`, indicatorcategory)  %>%
-  distinct()
-catindicators
-write_xlsx(catindicators, "catindicators.xlsx")
-
+categorical_df %>% filter(`Proportion Variable_description`=="Shock - No"|`Proportion Variable_description`=="Shock - Yes") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
 # since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
 
 # check reference categories between studies, making sure the same are used between studies that are analysed together
@@ -1065,6 +1065,14 @@ categorical_df$ci_high <- exp(log(categorical_df$or) + 1.96 * se_log_or)
 
 # combine lower an upper CI limits in a single variable
 categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categorical_df$ci_high) # combining confidence intervals
+
+# display all categorical indicators
+catindicators <- categorical_df %>%
+  filter(!is.na(`Proportion Variable_description`)) %>%
+  select(`Proportion Variable_description`, indicatorcategory, ref, or, ci_low, ci_high, studypop, highrisk, amr, pathogen_antibiotic_combination)  %>%
+  distinct()
+catindicators
+write_xlsx(catindicators, "catindicators.xlsx")
 
 #### 1. DESCRIPTION OF STUDIES ####
 # 1.1 count of studies & designs
