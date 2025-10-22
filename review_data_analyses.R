@@ -925,9 +925,10 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Route of infection - Non nosocomial healthcare associated|Source of infection-Healthcare|Healthcare associated|Healthcare-associated\r\ninfections", ignore_case = TRUE)) ~ "Healthcare associated, other than hospital-acquired or non specified if hospital",
       `Proportion Variable_description` %in% c("Healthcare-associated infection", "Healthcare-associated", "Health-care associated BSI", "Community/health care associated - Health care associated|Background parameters - Health care-associated acquisition of pathogen|Acquisition of bacteraemia-Healthcare-associated|Acquisition and onset setting -  healthcare-associated community-onset|Acquisition-Nosocomial and healthcare acquired") ~ "Healthcare associated, other than hospital-acquired or non specified if hospital",
       str_detect(`Proportion Variable_description`, regex("Community|Route of infection - Non-health care associated|Length of hospital stay before positive blood culture - <48h|Community or ambulatory health care|Hospitalization never or not within 1 yr", ignore_case = TRUE)) ~ "Community-acquired",
-      str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|Hospital-acquired|Recent international healthcare exposure|nosocomial", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
-      str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital|Currently resident in an intermediate level health care facility", ignore_case = TRUE)) ~ "Prior hospitalisation",
-      str_detect(`Proportion Variable_description`, regex("Hospital|Prior healthcare abroad|Healthcare-asscociated >=48h", ignore_case = TRUE)) ~ "Prior hospitalisation",
+      str_detect(`Proportion Variable_description`, regex("Hospital-acquired|nosocomial|Currently resident in an intermediate level health care facility|Healthcare-asscociated >=48h", ignore_case = TRUE)) ~ "Hospital-acquired", 
+      str_detect(`Proportion Variable_description`, regex("Prior hospital admission|hospitalisation|hospital stay|readmission|Hospital-acquired|Recent international healthcare exposure|Prior healthcare abroad", ignore_case = TRUE)) ~ "Prior hospitalisation", # check if nosocomial or hospital/healthcare associated should be a separate category
+      str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
+      str_detect(`Proportion Variable_description`, regex("Hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
       str_detect(`Proportion Variable_description`, regex("long-term care|long term care|long-term-care|nursing home|Long-term acute care facility residence", ignore_case = TRUE)) ~ "Long-term care facility",
       str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("colonizat|Prior ESBL", ignore_case = TRUE)) ~ "Prior colonization or infection",
@@ -940,23 +941,22 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("burn", ignore_case = TRUE)) ~ "Burns",
       str_detect(`Proportion Variable_description`, regex("crp|procalcitonin|biomarker", ignore_case = TRUE)) ~ "Biomarker positive",
       str_detect(`Proportion Variable_description`, regex("diabetes|hypertension|copd|asthma", ignore_case = TRUE)) ~ "NCDs",
-      str_detect(`Proportion Variable_description`, regex("solid organ tumor|comorbidity|cancer|renal|liver|hiv|malignancy|dementia|hemipleg|congestive heart failur|myocardial infarc|chronic neurological|vascular disease", ignore_case = TRUE)) ~ "Comorbidities",
-      str_detect(`Proportion Variable_description`, regex("Chronic|Underlying|Comorbid|Charlson|NCD|Kidney|Cardiac|Tumou?r|Neoplasia|Pulmonary|Rheumatic|Immunosuppress|Autoimmune|Malignant|Comorbid|Cancer", ignore_case = TRUE)) ~ "Comorbidities",
+      str_detect(`Proportion Variable_description`, regex("solid organ tumor|cancer|renal|liver|hiv|malignancy|dementia|hemipleg|congestive heart failur|myocardial infarc|chronic neurological|vascular disease", ignore_case = TRUE)) ~ "Comorbidities",
+      str_detect(`Proportion Variable_description`, regex("Chronic|Underlying|Charlson|NCD|Kidney|Cardiac|Tumou?r|Neoplasia|Rheumatic|Immunosuppress|Autoimmune|Malignant|Cancer", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("Severe underweight-for-age|severe underweight for age", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn", ignore_case = TRUE)) ~ "Young age",
-      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus", ignore_case = TRUE)) ~ "Primary/specific infection site",
+      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|infection site|Source of |focus|Combined infection site - pulmonary infection", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("resistant|susceptible|intermediate|isolated|Resistance to | resistance", ignore_case = TRUE)) ~ "Resistance profile",
       str_detect(`Proportion Variable_description`, regex("ESBL|MDR|Resistance|Susceptibility|Resistant", ignore_case = TRUE)) ~ "Resistance profile",
-      `Proportion Variable_description` %in% c("Outcome parameters - Appropriate therapy administered in <48 h") ~ "Duration to appropriate therapy (binary)",
-      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("duration|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE))) ~ "Prior antibiotic exposure, duration",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("duration", ignore_case = TRUE))) ~ "Prior antibiotic exposure, duration",
       (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("inappropriate|inadequate|incorrect|failure|wrong", ignore_case = TRUE))) ~ "Prior antibiotic exposure, inappropriate choice",
-      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|Previous .*therapy", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE))) ~ "Prior antibiotic exposure, specific choice",
-
-      str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|Previous .*therapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, overall",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|therapy|treatment", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE))) ~ "Prior antibiotic exposure, specific choice",
+      str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, non specific",
       # str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
-      str_detect(`Proportion Variable_description`, regex("corticoid|steroid|Previous .*therapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, overall",
+      str_detect(`Proportion Variable_description`, regex("corticoid|steroid", ignore_case = TRUE)) ~ "Prior corticosteroid use",
+      (str_detect(`Proportion Variable_description`, regex("therapy|treatment|administration", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("IV|intravenous", ignore_case = TRUE))) ~ "Prior IV therapy",
       str_detect(`Proportion Variable_description`, regex("male|women", ignore_case = TRUE)) ~ "Sex",
       `Proportion Variable_description` %in% c("men", "Men", "Sex - men") ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("Outcome - Survival|mortality|death|fatality|30-day outcome|7-day clinical treatment failure|clinical cure", ignore_case = TRUE)) ~ "Patient outcomes",
@@ -964,19 +964,46 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("race|ethnicity", ignore_case = TRUE)) ~ "Ethnicity",
       (str_detect(`Proportion Variable_description`, regex("recurrent", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("BSI", ignore_case = TRUE))) ~ "Prior colonization or infection",
       str_detect(`Proportion Variable_description`, regex("organism|species", ignore_case = TRUE)) ~ "Pathogen",
-      str_detect(`Proportion Variable_description`, regex("Streptococcus spp.|Escherichia coli|Klebsiella|Enterococcus|Staphylococcus|MRSA|MSSA|E\\. faecalis|E\\. faecium|Pathogen||Subtype|ST |Phylogenetic|genes|E\\.faecalis|A\\. baumannii|KP detection|Gram-negative|Gram-positive|EPE", ignore_case = TRUE)) ~ "Pathogen",
+      str_detect(`Proportion Variable_description`, regex("Streptococcus spp.|Escherichia coli|Klebsiella|Enterococcus|Staphylococcus|MRSA|MSSA|E\\. faecalis|E\\. faecium|Pathogen|Subtype|Phylogenetic|genes|E\\.faecalis|A\\. baumannii|KP detection|Gram-negative|Gram-positive", ignore_case = TRUE)) ~ "Pathogen",
       str_detect(`Proportion Variable_description`, regex("charlson", ignore_case = TRUE)) ~ "Comorbidity score",
       str_detect(`Proportion Variable_description`, regex("SOFA|APACHE|qSOFA|Severity|ICU|Critical|Fatal|Coma scale|pSOFA", ignore_case = TRUE)) ~ "Clinical severity",
-      str_detect(`Proportion Variable_description`, regex("Fever|Respiratory|Pleural|Manifestations|Clinical characteristics", ignore_case = TRUE)) ~ "Clinical manifestations",
+      str_detect(`Proportion Variable_description`, regex("Fever|Respiratory|Pleural|Manifestations|Clinical characteristics", ignore_case = TRUE)) ~ "Clinical presentation",
       str_detect(`Proportion Variable_description`, regex("Region|Residence|Insurance|Income", ignore_case = TRUE)) ~ "Geography",
       TRUE ~ "Other"
     ))
-# indicator added both as 'yes' and 'no'
-categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Shock - No")
+# after check of allocation, correcting some specific mislabelled categories
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcomes - Sepsis attributable mortality"] <- "Patient outcomes"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Stay in hemato-oncology wards"] <- "Prior hospitalisation"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Community infection - Previous antibiotic use within 90 days"] <- "Prior antibiotic exposure, non specific"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Community infection - Indwelling biliary drainage"] <- "Invasive procedures"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcomes - Sepsis attributable mortality"] <- "Patient outcomes"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcome parameters - Appropriate therapy administered in <48 h"] <- "Duration to appropriate therapy (binary)"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Effective antimicrobials within 48 hr"] <- "Duration to appropriate therapy (binary)"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Comorbid conditions - Positive A. baumannii blood culture after 72 h of admission"] <- "Hospital-acquired"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior admissions > 2"] <- "Prior hospitalisation"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior antibiotic therapy"] <- "Prior antibiotic exposure, non specific"
+categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Crude mortality rate 30 days"] <- "Patient outcomes"
 
+
+
+# indicator added both as 'yes' and 'no', or with multiple categories, of which some are more reference categories
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Shock - No")
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Length of hospital stay before positive blood culture - <48h")
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Length of hospital stay before positive blood culture - 2-14 days") # there is a category >14 days, this one is an intermediate. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Healthcare-associated condition - Hospitalization never or not within 1 yr") # there is a category hospi in last 90 days, this one is an intermediate. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Healthcare-associated condition - Hospitalization >180 day <= 1 yr") # there is a category hospi in last 90 days, this one is an intermediate. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Healthcare-associated condition - Hospitalization >90 <= 180 day") # there is a category hospi in last 90 days. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Beta-lactam or fluoroquinolone treatment - Timing of treatment - Never or not within 90 day") # there is a category treatment in last 30 days. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Beta-lactam or fluoroquinolone treatment - Timing of treatment - > 30 day, â‰¤ 90 day") # there is a category treatment in last 30 days, this one is an intermediate. CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Beta-lactam or fluoroquinolone treatment - Number of courses â‰¤ 90 day - 1 ") # overlap with other ABU indicator in same study (prior AMU in last 30 and 90 days).CHECK
+categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Beta-lactam or fluoroquinolone treatment - Number of courses â‰¤ 90 day - â‰¥ 2") # overlap with other ABU indicator in same study (prior AMU in last 30 and 90 days).CHECK
+
+Positive A. baumannii blood culture after 72 h of admission
 
 table(categorical_df$indicatorcategory)
-categorical_df %>% filter(`Proportion Variable_description`=="Shock - No"|`Proportion Variable_description`=="Shock - Yes") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
+categorical_df %>% filter(`Proportion Variable_description`=="Combined infection site - pulmonary infection") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
+categorical_df %>% filter(Study_ID=="#1663") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
+
 # since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
 
 # check reference categories between studies, making sure the same are used between studies that are analysed together
