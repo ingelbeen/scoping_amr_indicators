@@ -949,7 +949,7 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Severe underweight-for-age|severe underweight for age|Sickle cell", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn|Age - < 5|Age - <5|Age group (years) - 0-4", ignore_case = TRUE)) ~ "Young age (cutoffs </= 5 years)",
-      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|bacteremia|wound|Endocarditis|infection site|Source of |focus|Combined infection site|pulmonary infection|Mucosal barrier damage at the time of BSI", ignore_case = TRUE)) ~ "Primary/specific infection site",
+      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|wound|Endocarditis|infection site|Source of |focus|Combined infection site|pulmonary infection|Mucosal barrier damage at the time of BSI", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("Pyelonephritis|Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("resistant|susceptible|intermediate|isolated|Resistance to | resistance", ignore_case = TRUE)) ~ "Resistance profile",
       str_detect(`Proportion Variable_description`, regex("ESBL|MDR|Resistance|Susceptibility|Resistant", ignore_case = TRUE)) ~ "Resistance profile",
@@ -1131,6 +1131,9 @@ categorical_df <- categorical_df %>%  mutate(indicatorcategory_level2 = case_whe
   indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("combined infection site|primary site|primary infection site|infection site|source of|focus", ignore_case = TRUE)) ~ "Mixed/unspecified site",
   TRUE ~ indicatorcategory_level2))
 
+# check those not assigned to a level 2
+check <- categorical_df %>% filter(categorical_df$indicatorcategory_level2=="Primary/specific infection site") %>% select(`Proportion Variable_description`)
+
 # recode level2 for invasive procedures, since that is already level 1
 categorical_df <- categorical_df %>%  mutate(indicatorcategory_level2 = case_when(
   indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("tracheal|tracheo|intubat|bronchoscopy|ventilator|mechanical ventilat|aspiration", ignore_case = TRUE)) ~ "Airway/respiratory procedures",
@@ -1142,9 +1145,6 @@ categorical_df <- categorical_df %>%  mutate(indicatorcategory_level2 = case_whe
   indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("surgery|surgical proced|operation|caesarian|cesarian|caesarean|thoracentesis|puncture|invasive", ignore_case = TRUE)) ~ "Surgery / Invasive procedure",
   indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("invasive", ignore_case = TRUE)) ~ "Unspecified invasive procedure",
   TRUE ~ indicatorcategory_level2))
-
-# check if correctly labelled
-check <- categorical_df %>% group_by(indicatorcategory_level1, categorical_df$indicatorcategory_level2) %>% summarise(n=n())
 
 # add level 3 for specific subgroups of interest that already have level 2
 # antibiotic class exposed to - CHECK, some might still not be categorised
@@ -1584,7 +1584,7 @@ summarytable_cat_indicators <- categorical_summary %>%
     columns = n_studies,
     colors = scales::col_numeric(
       palette = c("white", "steelblue"),
-      domain = c(1, 123)
+      domain = c(1, 125)
     )
   ) %>%
   data_color(
@@ -1594,13 +1594,13 @@ summarytable_cat_indicators <- categorical_summary %>%
         if (v <= 1) {
           scales::col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
         } else {
-          scales::col_numeric(c("white", "darkred"), domain = c(1, 14))(v)
+          scales::col_numeric(c("white", "darkred"), domain = c(1, 13))(v)
         }
       })
     }
   )
 gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.docx")   
-gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.html")  # interactive HTML
+gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.html")  # as HTML to open in browser
 
 # visualize all odds ratios reported by studies on a plot, excluding those with a missing value
 # first remove extreme values of values with a 
