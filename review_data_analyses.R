@@ -890,9 +890,6 @@ continuous_dfshort <- continuous_df %>% select(`Study ID`, Study_ID, Study_count
   distinct()
 
 # DESCRIPTIVE_dichotomous_proxy-indicators -> reshape the second part of df_long in a longer format, in which all variables containing the categorical indicators Number_1, Number_2, etc. are brought together in the same variable
-# # check if the order of descriptive dichotomous and the univariate dichotomous variables correspond
-# check <- df_long %>% group_by(`Proportion_1 Variable_description`, `Number_1 Variable_description`, `Predictor_1 Definition...1468`, `Predictor_1 Definition...1717`) %>% summarise((n=n()))
-
 categorical_df <- df_long %>% 
   select(1:32, studypop, highrisk, amr, pathogen_antibiotic_combination, 394:965, Model, Resistant_group_tot_nb, Susceptible_group_tot_nb)
 
@@ -920,7 +917,7 @@ categorical_df <- categorical_df %>% filter(!is.na(`Number Variable_description`
 # I would also break up 'invasive procedures' and 'comorbidities'
 # invasive procedures subcategories: surgery, airways (incl ventilator/intubation), implanted devices/protheses, injections/infusions, urinary or gastro-intestinal tubes, vascular access (incl dialysis, IV cannules, CVC)
 categorical_df <- categorical_df %>%  mutate(
-    indicatorcategory = case_when( # replace by indicatorcategory when done
+    indicatorcategory_level2 = case_when( 
       str_detect(`Proportion Variable_description`, regex("ICU|intensive care", ignore_case = TRUE)) ~ "Prior ICU stay",
       str_detect(`Proportion Variable_description`, regex("Clinical severity - All-cause 30-day mortality|Overall in-hospital mortality", ignore_case = TRUE)) ~ "Patient outcomes, mortality", # is an outcome, so avoid that it's labelled 'severity' or 'prior hospi'
       str_detect(`Proportion Variable_description`, regex("Overall LOS, days - 16+|Infection-associated LOS, days - 16+ ", ignore_case = TRUE)) ~ "Patient outcomes, duration of hospitalisation or treatment", # is an outcome, so avoid that it's labelled 'severity' or 'prior hospi'
@@ -933,7 +930,7 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Hospitalization|Hospitalisation|Previous admission|Admission history|Prior hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
       str_detect(`Proportion Variable_description`, regex("Hospital", ignore_case = TRUE)) ~ "Prior hospitalisation",
       str_detect(`Proportion Variable_description`, regex("Living in a care home|long-term care|long term care|long-term-care|nursing home|Long-term acute care facility residence", ignore_case = TRUE)) ~ "Long-term care facility",
-      str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis|chest infection", ignore_case = TRUE)) ~ "Primary/specific infection site",
+      str_detect(`Proportion Variable_description`, regex("primary infection site|cellulitis|chest infection|Catheter-associated", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("colonizat|Prior ESBL", ignore_case = TRUE)) ~ "Prior colonization or infection",
       str_detect(`Proportion Variable_description`, regex("Colonisation|Colonization|Previous .*infection|Previous .*isolate|History of .*infection|infection or\r\ncolonization of", ignore_case = TRUE)) ~ "Prior colonization or infection",
       str_detect(`Proportion Variable_description`, regex("Urological manipulation history|Thoracentesis|Tracheal|Cannula|Aspiration|Nutrition|pacemaker|catheter|surgery|surgical proced|caesarian|cesarian|Caesarean|intubat|foley|catheter|central line|ventilator|surgery|invasive|hemodialys|mechanical ventilat|central venous line|gastric tube|parenteral nutrit", ignore_case = TRUE)) ~ "Invasive procedures",
@@ -952,17 +949,18 @@ categorical_df <- categorical_df %>%  mutate(
       str_detect(`Proportion Variable_description`, regex("Severe underweight-for-age|severe underweight for age|Sickle cell", ignore_case = TRUE)) ~ "Comorbidities",
       str_detect(`Proportion Variable_description`, regex("preterm|low birth weight|prematurity|Gestation|Birth weight|Birthweight", ignore_case = TRUE)) ~ "Preterm birth/low birth weight",
       str_detect(`Proportion Variable_description`, regex("infant|neonate|child|young age|newborn|Inborn|Age - < 5|Age - <5|Age group (years) - 0-4", ignore_case = TRUE)) ~ "Young age (cutoffs </= 5 years)",
-      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|uti|bacteremia|wound|Endocarditis|infection site|Source of |focus|Combined infection site - pulmonary infection|pulmonary infection|Mucosal barrier damage at the time of BSI", ignore_case = TRUE)) ~ "Primary/specific infection site",
+      str_detect(`Proportion Variable_description`, regex("cellulitis|pneumonia|bacteremia|wound|Endocarditis|infection site|Source of |focus|Combined infection site|pulmonary infection|Mucosal barrier damage at the time of BSI", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("Pyelonephritis|Primary site|Skin|Soft tissue|Urinary tract|Biliary|Bone|Joint|Abdominal|Hepato|Lung|Respiratory|Gastro", ignore_case = TRUE)) ~ "Primary/specific infection site",
       str_detect(`Proportion Variable_description`, regex("resistant|susceptible|intermediate|isolated|Resistance to | resistance", ignore_case = TRUE)) ~ "Resistance profile",
       str_detect(`Proportion Variable_description`, regex("ESBL|MDR|Resistance|Susceptibility|Resistant", ignore_case = TRUE)) ~ "Resistance profile",
       (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|cephalosporin|carbapenem|vancomycin|fluoroquinolone", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("duration", ignore_case = TRUE))) ~ "Prior antibiotic exposure, duration",
-      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|treatment|therapy", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("inappropriate|inadequate|incorrect|failure|wrong|inopportune", ignore_case = TRUE))) ~ "Prior antibiotic exposure, inappropriate choice",
-      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|therapy|treatment|use|exposure", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("tigecycline|polymixin|cephalosporin|meropenem|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide|vancomycin|polymyxin", ignore_case = TRUE))) ~ "Prior antibiotic exposure, specific choice",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|treatment|therapy", ignore_case = TRUE)) & str_detect(`Proportion Variable_description`, regex("inappropriate|inadequate|incorrect|failure|wrong|inopportune", ignore_case = TRUE))) ~ "Inappropriate empirical antibiotic treatment",
+      str_detect(`Proportion Variable_description`, regex("Therapeutic management - Adequate targeted |Therapeutic management - Adequate initial |Appropriate directed therapy|Appropriate Empiric therapy|Appropriate empirical therapy| appropriate empiric antibiotic therapy|Appropriate antimicrobial therapy - Appropriate therapy administered overall|Appropriate antibiotic therapy", ignore_case = TRUE)) ~ "Appropriate empirical antibiotic choice",
+      (str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy|therapy|treatment|use|exposure", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("tigecycline|polymixin|cephalosporin|meropenem|carbapenem|vancomycin|fluoroquinolone|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide|vancomycin|polymyxin", ignore_case = TRUE))) ~ "Prior antibiotic exposure, specific choice",
       str_detect(`Proportion Variable_description`, regex("antibiotic|antimicrobial|chemotherapy", ignore_case = TRUE)) ~ "Prior antibiotic exposure, non specific",
       # str_detect(`Proportion Variable_description`, regex("cephalosporin|carbapenem|vancomycin|fluoroquinolone|therapy|Piperacillin|Linezolid|Ciprofloxacin|Quinolone|Carbapenem|Ceph|Beta-lactam|Glycopeptide", ignore_case = TRUE)) ~ "Prior antibiotic exposure",
       str_detect(`Proportion Variable_description`, regex("corticoid|steroid", ignore_case = TRUE)) ~ "Prior corticosteroid use",
-      (str_detect(`Proportion Variable_description`, regex("therapy|treatment|administration", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("IV|intravenous", ignore_case = TRUE))) ~ "Prior IV therapy",
+      (str_detect(`Proportion Variable_description`, regex("therapy|treatment|administration|Outpatient intravenous therapy in past year", ignore_case = TRUE))&str_detect(`Proportion Variable_description`, regex("IV|intravenous", ignore_case = TRUE))) ~ "Prior IV therapy",
       str_detect(`Proportion Variable_description`, regex("male|women", ignore_case = TRUE)) ~ "Sex",
       `Proportion Variable_description` %in% c("men", "Men", "Sex - men") ~ "Sex",
       str_detect(`Proportion Variable_description`, regex("mortality|death|fatality|30-day outcome|Outcome - Dead", ignore_case = TRUE)) ~ "Patient outcomes, mortality",
@@ -981,34 +979,38 @@ categorical_df <- categorical_df %>%  mutate(
       TRUE ~ "Other"
     ))
 # after check of allocation, correcting some specific mislabelled categories
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcomes - Sepsis attributable mortality"] <- "Patient outcomes, mortality"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Stay in hemato-oncology wards"] <- "Prior hospitalisation"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Community infection - Previous antibiotic use within 90 days"] <- "Prior antibiotic exposure, non specific"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Community infection - Indwelling biliary drainage"] <- "Invasive procedures"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcome parameters - Appropriate therapy administered in <48 h"] <- "Duration to appropriate therapy (binary)"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Effective antimicrobials within 48 hr"] <- "Duration to appropriate therapy (binary)"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Comorbid conditions - Positive A. baumannii blood culture after 72 h of admission"] <- "Hospital-acquired"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior admissions > 2"] <- "Prior hospitalisation"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior antibiotic therapy"] <- "Prior antibiotic exposure, non specific"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Underlying condition - Crude mortality rate 30 days"] <- "Patient outcomes, mortality"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Recent ventilator-associated pneumonia due to CRAB"] <- "Primary/specific infection site" # not sure. CHECK
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Comorbidity - Malnutrition"] <- "Comorbidities" 
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Baseline comorbidities - hematological"] <- "Comorbidities" 
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Outcome parameters - Discharged to long-term care facilities"] <- "Other" 
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Clinical outcomes - Disseminated intravascular coagulation"] <- "Other" # CHECK
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Clinical outcomes - â‰¥ 10 days of hospital stay from culture to discharge"] <- "Patient outcomes, duration of hospitalisation or treatment"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Healthcare-Associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Infection type - Healthcare-associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Epidemiologic classification - Healthcare-associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Index culture >48 h"] <- "Hospital-acquired"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Unreasonable empirical treatment"] <- "Prior antibiotic exposure, inappropriate choice"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Unnecessary use of carbapenems"] <- "Prior antibiotic exposure, inappropriate choice"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Carbapenem administration history"] <- "Prior antibiotic exposure, specific choice"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="Received antimicorbials during previous month"] <- "Prior antibiotic exposure, non specific"
-categorical_df$indicatorcategory[categorical_df$`Proportion Variable_description`=="LOS to the first positive culture - â‰¥20 days"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Outcomes - Sepsis attributable mortality"] <- "Patient outcomes, mortality"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Stay in hemato-oncology wards"] <- "Prior hospitalisation"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Community infection - Previous antibiotic use within 90 days"] <- "Prior antibiotic exposure, non specific"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Community infection - Indwelling biliary drainage"] <- "Invasive procedures"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Outcome parameters - Appropriate therapy administered in <48 h"] <- "Duration to appropriate therapy (binary)"
+# categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Effective antimicrobials within 48 hr"] <- "Duration to appropriate therapy (binary)"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Comorbid conditions - Positive A. baumannii blood culture after 72 h of admission"] <- "Hospital-acquired"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior admissions > 2"] <- "Prior hospitalisation"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Underlying condition - Prior antibiotic therapy"] <- "Prior antibiotic exposure, non specific"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Underlying condition - Crude mortality rate 30 days"] <- "Patient outcomes, mortality"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Recent ventilator-associated pneumonia due to CRAB"] <- "Primary/specific infection site" # not sure. CHECK
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Comorbidity - Malnutrition"] <- "Comorbidities" 
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Baseline comorbidities - hematological"] <- "Comorbidities" 
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Outcome parameters - Discharged to long-term care facilities"] <- "Other" 
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Clinical outcomes - Disseminated intravascular coagulation"] <- "Other" # CHECK
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Clinical outcomes - â‰¥ 10 days of hospital stay from culture to discharge"] <- "Patient outcomes, duration of hospitalisation or treatment"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Healthcare-Associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Infection type - Healthcare-associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Epidemiologic classification - Healthcare-associated"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Index culture >48 h"] <- "Hospital-acquired"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Unreasonable empirical treatment"] <- "Inappropriate empirical antibiotic treatment"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Assessment models - Appropriateness of empirical therapy, no"] <- "Inappropriate empirical antibiotic treatment"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Unnecessary use of carbapenems"] <- "Inappropriate empirical antibiotic treatment"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Carbapenem administration history"] <- "Prior antibiotic exposure, specific choice"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Received antimicorbials during previous month"] <- "Prior antibiotic exposure, non specific"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="LOS to the first positive culture - â‰¥20 days"] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[grepl("delays of more than 72 h", categorical_df$`Proportion Variable_description`)] <- "Other"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="Transition to oral therapy"] <- "Other"
+categorical_df$indicatorcategory_level2[categorical_df$`Proportion Variable_description`=="In appropriate empiric therapy"] <- "Inappropriate empirical antibiotic treatment"
 
 # all specific "healthcare-associated" checked, relabel remaining as non specified
-categorical_df$indicatorcategory[grepl("ealthcare-associated", categorical_df$`Proportion Variable_description`)==T|grepl("ealthcare associated", categorical_df$`Proportion Variable_description`)==T] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
+categorical_df$indicatorcategory_level2[grepl("ealthcare-associated", categorical_df$`Proportion Variable_description`)==T|grepl("ealthcare associated", categorical_df$`Proportion Variable_description`)==T] <- "Healthcare associated, other than hospital-acquired or non specified if hospital"
 
 
 # indicator added both as 'yes' and 'no', or with multiple categories, of which some are more reference categories
@@ -1039,7 +1041,6 @@ categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="
 categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Outcome - Survival"|Study_ID!="#8208") # also reports mort, so alive is ref
 categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Outcome - Favorable (cure or improvement)"|Study_ID!="#4049") # also reports mort, so alive is ref
 
-
 categorical_df <- categorical_df[!grepl("^Department-", categorical_df$`Proportion Variable_description`) & # many random departments, but unclear what the exposure was there
                                    !grepl("Inpatient service-", categorical_df$`Proportion Variable_description`) &
                                    !grepl("Isolates period -", categorical_df$`Proportion Variable_description`) &
@@ -1052,83 +1053,125 @@ categorical_df <- categorical_df[!categorical_df$`Proportion Variable_descriptio
                                                                                           "Age - 40-59", "Age - 60-79"),]
 
 categorical_df <- categorical_df %>% filter(`Proportion Variable_description`!="Age") # unspecified how age is categorical
-categorical_df <- categorical_df %>% filter(grepl("Elixhauser",`Proportion Variable_description`)==F|indicatorcategory!="Other") # high scores have been labelled, the low/reference ones out
-categorical_df <- categorical_df %>% filter(grepl("LOS",`Proportion Variable_description`)==F|indicatorcategory!="Other") # long LOS has been labelled, the low/reference ones out
+categorical_df <- categorical_df %>% filter(grepl("Elixhauser",`Proportion Variable_description`)==F|indicatorcategory_level2!="Other") # high scores have been labelled, the low/reference ones out
+categorical_df <- categorical_df %>% filter(grepl("LOS",`Proportion Variable_description`)==F|indicatorcategory_level2!="Other") # long LOS has been labelled, the low/reference ones out
 
 
-table(categorical_df$indicatorcategory)
-categorical_df %>% filter(`Proportion Variable_description`=="Prior carbapenem use") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
-check <- categorical_df %>% filter(grepl("Outcome",`Proportion Variable_description`)==T) %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
-# to check: Outcome|Survival|
+table(categorical_df$indicatorcategory_level2)
 
-categorical_df %>% filter(Study_ID=="#1663") %>% select(`Proportion Variable_description`, indicatorcategory, Study_ID)
+check <- categorical_df %>% filter(grepl("Community",`Proportion Variable_description`)==T) %>% select(`Proportion Variable_description`, indicatorcategory_level2, Study_ID)
 
 
 # create two levels of indicators (general categories, then more specific)
 categorical_df$indicatorcategory_level1 <- dplyr::case_when(
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Healthcare associated, other than hospital-acquired or non specified if hospital",
     "Hospital-acquired", "Long-term care facility", "Prior hospitalisation", "Prior ICU stay", 
     "Community-acquired"
   ) ~ "Healthcare exposure",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Prior colonization or infection"
   ) ~ "Prior colonization or infection",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Invasive procedures", "Prior IV therapy",
     "Transplant", "Blood transfusion"
   ) ~ "Invasive procedures",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Prior antibiotic exposure, specific choice",
-    "Prior antibiotic exposure, inappropriate choice",
+    "Inappropriate empirical antibiotic treatment",
     "Prior antibiotic exposure, duration",
     "Prior antibiotic exposure, non specific",
-    "Duration to appropriate therapy (binary)",
-    "Prior corticosteroid use"
+    "Prior corticosteroid use", "Appropriate empirical antibiotic choice"
   ) ~ "Antibiotic exposure",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Comorbidities", "Comorbidity score, high (Charlson >2;Elixhauser>13)", "NCDs"
   ) ~ "Comorbidities",
   
-  categorical_df$indicatorcategory %in% c(
-    "Clinical presentation, other than infection site", "Clinical severity",
-    "Primary/specific infection site", "Preterm birth/low birth weight"
-  ) ~ "Clinical presentation",
+  categorical_df$indicatorcategory_level2 %in% c(
+    "Clinical presentation, other than infection site", "Clinical severity", "Preterm birth/low birth weight"
+    ) ~ "Clinical presentation",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c("Primary/specific infection site") ~ "Primary/specific infection site",
+  
+  categorical_df$indicatorcategory_level2 %in% c(
     "Older age (cutoffs >/= 60 years)", "Young age (cutoffs </= 5 years)",
     "Ethnicity", "Sex", "Geography"
   ) ~ "Demographics",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Low blood values", "Biomarker positive"
   ) ~ "Biomedical results",
   
-  categorical_df$indicatorcategory %in% c(
-    "Pathogen", "Resistance profile"
-  ) ~ "Pathogen/resistance",
+  categorical_df$indicatorcategory_level2 %in% c(
+    "Pathogen", "Resistance profile", "Duration to appropriate therapy (binary)"
+  ) ~ "Microbiological indicators",
   
-  categorical_df$indicatorcategory %in% c(
+  categorical_df$indicatorcategory_level2 %in% c(
     "Patient outcomes, cure", "Patient outcomes, mortality",
     "Patient outcomes, duration of hospitalisation or treatment",
     "Patient outcomes, treatment failure", "Patient outcomes, complications"
   ) ~ "Patient outcomes",
-  
-  TRUE ~ "Other"
-)
+  TRUE ~ "Other")
+
+# add level 2 for specific subgroups of interest that already have level 2
+# primary infection site
+categorical_df <- categorical_df %>%  mutate(indicatorcategory_level2 = case_when(
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("pyelonephritis|urinary tract|uti", ignore_case = TRUE)) ~ "Urinary tract",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("lung|respiratory|pneumonia|pulmonary infection|ventilator-associated|chest infection", ignore_case = TRUE)) ~ "Respiratory tract/pulmonary",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("abdominal|biliary|hepato|gastro", ignore_case = TRUE)) ~ "Intra-abdominal/hepatobiliary",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("skin|soft tissue|cellulitis|wound", ignore_case = TRUE)) ~ "Skin/soft tissue",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("bone|joint", ignore_case = TRUE)) ~ "Bone/joint",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("endocarditis", ignore_case = TRUE)) ~ "Endocarditis",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("catheter-associated|catheter-related|catheter associat|catheter related", ignore_case = TRUE)) ~ "IV catheter-related",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("mucosal barrier damage", ignore_case = TRUE)) ~ "Mucosal barrier injury",
+  indicatorcategory_level2 == "Primary/specific infection site" & str_detect(`Proportion Variable_description`, regex("combined infection site|primary site|primary infection site|infection site|source of|focus", ignore_case = TRUE)) ~ "Mixed/unspecified site",
+  TRUE ~ indicatorcategory_level2))
+
+# recode level2 for invasive procedures, since that is already level 1
+categorical_df <- categorical_df %>%  mutate(indicatorcategory_level2 = case_when(
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("tracheal|tracheo|intubat|bronchoscopy|ventilator|mechanical ventilat|aspiration", ignore_case = TRUE)) ~ "Airway/respiratory procedures",
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("central line|central venous line|hemodialys|dialysis|blood purification", ignore_case = TRUE)) ~ "Central venous access/dialysis",
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("cannula|peripheral line", ignore_case = TRUE)) ~  "Peripheral venous access",
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("pacemaker|device|implant", ignore_case = TRUE)) ~ "Internal device / implant",
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("endoscopy|foley|catheter(?!.*central)|urinary|gastric tube|drain|tube|nutrition|parenteral nutrit|urological manipulation|genitourinary intervention|indwelling biliary drainage", ignore_case = TRUE)) ~
+    "Gastrointestinal/urinary tubes or drains", # I added endoscopy here, but not sure if it should be. CHECK
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("surgery|surgical proced|operation|caesarian|cesarian|caesarean|thoracentesis|puncture|invasive", ignore_case = TRUE)) ~ "Surgery / Invasive procedure",
+  indicatorcategory_level2 == "Invasive procedures" & str_detect(`Proportion Variable_description`, regex("invasive", ignore_case = TRUE)) ~ "Unspecified invasive procedure",
+  TRUE ~ indicatorcategory_level2))
+
+# check if correctly labelled
+check <- categorical_df %>% group_by(indicatorcategory_level1, categorical_df$indicatorcategory_level2) %>% summarise(n=n())
+
+# add level 3 for specific subgroups of interest that already have level 2
+# antibiotic class exposed to - CHECK, some might still not be categorised
+categorical_df <- categorical_df %>%  mutate(indicatorcategory_level3 = case_when(
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("tigecycline", ignore_case = TRUE)) ~ "Tigecycline",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("ceftriaxone|cefotaxime|ceftazidim|cefepim|cephalosporin|ceph|cefurox|cefazol", ignore_case = TRUE)) ~ "Cephems",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("carbapenem|meropenem|imipenem", ignore_case = TRUE)) ~ "Carbapenems",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("amikacin|gentamycin", ignore_case = TRUE)) ~ "Aminoglycosides",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("piperacillin|ampicillin|amoxicillin|beta-?lactam|penicillin", ignore_case = TRUE)) ~ "Beta-lactams",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("glycopeptide|vancomycin|linezolid", ignore_case = TRUE)) ~ "Glycopeptides/oxazolidinones",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("polymyxin|polymixin", ignore_case = TRUE)) ~ "Polymyxins",
+      indicatorcategory_level2 == "Prior antibiotic exposure, specific choice" & str_detect(`Proportion Variable_description`, regex("fluoroquinolone|ciprofloxacin|quinolone", ignore_case = TRUE)) ~ "Fluoroquinolones",
+      TRUE ~ NA_character_  ))
+# regroup the classes of which there are <10 studies 
+categorical_df$indicatorcategory_level3[categorical_df$indicatorcategory_level3=="Polymyxins"] <- "Other classes"
+categorical_df$indicatorcategory_level3[categorical_df$indicatorcategory_level3=="Aminoglycosides"] <- "Other classes"
+categorical_df$indicatorcategory_level3[is.na(categorical_df$indicatorcategory_level3)&categorical_df$indicatorcategory_level2 == "Prior antibiotic exposure, specific choice"] <- "Other classes"
+# the remaining "Other" are indeed sparadic other classes (macrolides, polymyxins,...)
 
 # since measures of association are not reported by all studies, and those reported are in the separate 'predictors' part of the database, calculate crude odds ratios based on the reported counts exposed vs unexposed in the AMR and S groups
 
 # check reference categories between studies, making sure the same are used between studies that are analysed together
 # check indicator categories and if a reference is specified
-ref <- categorical_df %>% group_by(indicatorcategory, `Proportion Variable_description`, Study_ID) %>% summarise(n=n()) # STILL NEED TO ADD REFERENCE FOR OTHER CATEGORICAL VARIABLES THAT ARE NOT YES VS NO
+ref <- categorical_df %>% group_by(indicatorcategory_level2, `Proportion Variable_description`, Study_ID) %>% summarise(n=n()) # STILL NEED TO ADD REFERENCE FOR OTHER CATEGORICAL VARIABLES THAT ARE NOT YES VS NO
 # add a variable to indicate which value is used as the reference
-categorical_df$ref[categorical_df$indicatorcategory=="Sex"] <- "male" 
-categorical_df$ref[categorical_df$indicatorcategory=="Sex"&grepl("female",categorical_df$`Proportion Variable_description`, ignore.case = T)] <- "female" 
+categorical_df$ref[categorical_df$indicatorcategory_level2=="Sex"] <- "male" 
+categorical_df$ref[categorical_df$indicatorcategory_level2=="Sex"&grepl("female",categorical_df$`Proportion Variable_description`, ignore.case = T)] <- "female" 
 
 # reformat number variables (now often containing non numerical characters)
 # is not a categorical variable
@@ -1162,6 +1205,8 @@ categorical_df$`Number Resistant_group_value`[categorical_df$`Number Resistant_g
 categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="not mentioned"&categorical_df$`Proportion Susceptible_comparator_group_value`=="11.76"] <- "16" # deducted the number based on the proportion reported 
 categorical_df$Resistant_group_tot_nb[categorical_df$Resistant_group_tot_nb=="91.77"&categorical_df$Study_ID=="#4740"] <- "87" # corrected based on check in the full text
 categorical_df$Susceptible_group_tot_nb[categorical_df$Susceptible_group_tot_nb=="314.44"&categorical_df$Study_ID=="#4740"] <- "321" # corrected based on check in the full text
+categorical_df$Susceptible_group_tot_nb[categorical_df$`Number Susceptible_comparator_group_value`=="43/53"] <- "53" 
+categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$`Number Susceptible_comparator_group_value`=="43/53"] <- "43" 
 
 categorical_df$Resistant_group_tot_nb[is.na(categorical_df$Resistant_group_tot_nb)&categorical_df$Study_ID=="#3295"] <- "286" # looked up in the extraction table, under col 8 (Note)
 categorical_df$Susceptible_group_tot_nb[is.na(categorical_df$Susceptible_group_tot_nb)&categorical_df$Study_ID=="#3295"] <- "409" # looked up in the extraction table, under col 8 (Note)
@@ -1181,14 +1226,25 @@ table(categorical_df$Susceptible_group_tot_nb, useNA = "always")
 table(categorical_df$`Number Resistant_group_value`, useNA = "always")
 table(categorical_df$`Number Susceptible_comparator_group_value`, useNA = "always")
 
-check <- categorical_df %>% filter(is.na(categorical_df$`Number Susceptible_comparator_group_value`)) %>% select(Study_ID, 33:61)
+# CHECK CHECK - the below need to be verified in the articles. the number is supposed to be a subset of the total
+check <- categorical_df %>% filter(is.na(categorical_df$`Number Susceptible_comparator_group_value`)) %>% select(Study_ID, 33:61) # check those with missing counts
+check2 <- categorical_df %>% filter(categorical_df$`Number Susceptible_comparator_group_value`>categorical_df$Susceptible_group_tot_nb) %>% select(Study_ID, 33:61) # check if the exposed group is less than the total group => else, need to verify
+check3 <- categorical_df %>% filter(categorical_df$`Number Resistant_group_value`>categorical_df$Resistant_group_tot_nb) %>% select(Study_ID, 33:61) # check if the exposed group is less than the total group => else, need to verify
+# mark those, so they can be excluded for now from the analysis
+categorical_df$error[categorical_df$`Number Susceptible_comparator_group_value`>categorical_df$Susceptible_group_tot_nb] <- "error_in_exposed_or_total_counts_extracted"
+categorical_df$error[categorical_df$`Number Resistant_group_value`>categorical_df$Resistant_group_tot_nb] <- "error_in_exposed_or_total_counts_extracted"
+# check to see if this is because these are case-control studies
+table(categorical_df$Study_design, categorical_df$error, useNA = "always")  # only ~10% in case control studies
+# export a table to check the errors
+check_count_errors <- categorical_df %>% filter(!is.na(error)) 
+write_xlsx(check_count_errors, "check_count_errors.xlsx")
 
 # make sure the same reference is used when comparing associations
 # to make sure "male" is compared against "female" as the reference category (most frequent comparison):
 # if sex is "female", replace the number of female resistant by the number of male resistance and the n female susceptible by male
 categorical_df$`Number Resistant_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- categorical_df$Resistant_group_tot_nb[categorical_df$ref=="female"&!is.na(categorical_df$ref)] - categorical_df$`Number Resistant_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
 categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- categorical_df$Susceptible_group_tot_nb[categorical_df$ref=="female"&!is.na(categorical_df$ref)] - categorical_df$`Number Susceptible_comparator_group_value`[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
-categorical_df$indicatorcategory[categorical_df$indicatorcategory=="Sex"] <- "Male sex"
+categorical_df$indicatorcategory_level2[categorical_df$indicatorcategory_level2=="Sex"] <- "Male sex"
 
 # 1/categorical_df$or[categorical_df$ref=="female"&!is.na(categorical_df$ref)] # instead of inversing the OR, now the counts are recalculated in the rows above
 # categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)] <- 1/categorical_df$ci_low[categorical_df$ref=="female"&!is.na(categorical_df$ref)]
@@ -1207,20 +1263,25 @@ se_log_or <- sqrt(1/a + 1/b + 1/c + 1/d)
 categorical_df$ci_low  <- round(exp(log(categorical_df$or) - 1.96 * se_log_or),2)
 categorical_df$ci_high <- round(exp(log(categorical_df$or) + 1.96 * se_log_or),2)
 
+# remove values of studies with errors in the extracted counts (e.g., nominator is higher than denominator)
+categorical_df$or[!is.na(categorical_df$error)] <- NA
+categorical_df$ci_low[!is.na(categorical_df$error)] <- NA
+categorical_df$ci_high[!is.na(categorical_df$error)] <- NA
+
 # combine lower an upper CI limits in a single variable
 categorical_df$ci_label <- sprintf("%.1f-%.1f", categorical_df$ci_low, categorical_df$ci_high) # combining confidence intervals
 
 # display all categorical indicators
 catindicators <- categorical_df %>%
   filter(!is.na(`Proportion Variable_description`)) %>%
-  select(`Proportion Variable_description`, indicatorcategory, ref, or, ci_low, ci_high, studypop, highrisk, amr, pathogen_antibiotic_combination)  %>%
+  select(`Proportion Variable_description`, indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3, ref, or, ci_low, ci_high, studypop, highrisk, amr, pathogen_antibiotic_combination)  %>%
   distinct()
 catindicators
 write_xlsx(catindicators, "catindicators.xlsx")
 # display all "other"
 othercatindicators <- categorical_df %>%
-  filter(!is.na(`Proportion Variable_description`)&indicatorcategory=="Other") %>%
-  select(`Proportion Variable_description`, indicatorcategory, ref, or, ci_low, ci_high, studypop, highrisk, amr, pathogen_antibiotic_combination)  %>%
+  filter(!is.na(`Proportion Variable_description`)&indicatorcategory_level2=="Other") %>%
+  select(`Proportion Variable_description`, indicatorcategory_level2, ref, or, ci_low, ci_high, studypop, highrisk, amr, pathogen_antibiotic_combination)  %>%
   distinct()
 othercatindicators
 write_xlsx(othercatindicators, "othercatindicators.xlsx")
@@ -1439,18 +1500,26 @@ summary_num_indicators <- continuous_df %>%
 summary_num_indicators # 484 indicators reported
 # for numerical variables, summarize the number of analyses they have been reported in
 summary_indicator_frequencies <- continuous_dfshort %>%
-  group_by(indicatorcategory) %>%
+  group_by(indicatorcategory_level2) %>%
   filter(!is.na(`resistant_group p-value`)) %>%
   summarise(n=n())
 summary_indicator_frequencies
 
 # 2.2 CATEGORICAL VARIABLES
+# exclude the microbiological indicators, since that was not the aim of the analysis
+categorical_df <- categorical_df %>% filter(indicatorcategory_level1!="Microbiological indicators")
+
 # count categorical indicators reported
-length(unique(categorical_df$`Number Variable_description`)) # 2388 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
+length(unique(categorical_df$`Number Variable_description`)) # 2157 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
 length(unique(categorical_df$`Proportion Variable_description`))
+# simple count, to check
+categorical_summary <- categorical_df %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(n_studies = n_distinct(Study_ID))
+categorical_summary
 # summarize the reported indicators, overall and by AMR profile
 categorical_summary <- categorical_df %>%
-  group_by(indicatorcategory_level1, indicatorcategory) %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
   summarise(
     n_studies = n_distinct(Study_ID),                           
     sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
@@ -1464,14 +1533,20 @@ categorical_summary <- categorical_df %>%
   ungroup()
 #reorder so the most frequent are on top
 categorical_summary <- categorical_summary %>%
-  group_by(indicatorcategory_level1) %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
   arrange(desc(n_studies), .by_group = TRUE) %>%
   ungroup()
 categorical_summary
+# keep just once the label of the level 1 categories
+categorical_summary <- categorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+categorical_summary
+# export to a spreadsheet
 write_xlsx(categorical_summary, "categorical_summary.xlsx")
 
 categorical_by_amr_summary <- categorical_df %>%
-  group_by(indicatorcategory_level1, indicatorcategory, amr) %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, amr) %>%
   summarise(
     n_studies = n_distinct(Study_ID),                           
     sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
@@ -1485,12 +1560,6 @@ categorical_by_amr_summary <- categorical_df %>%
   ungroup()
 categorical_by_amr_summary
 
-# keep just once the label of the level 1 categories
-categorical_summary <- categorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
-  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
-  ungroup()
-categorical_summary
-
 # present in a heatmap-style table
 formattable(categorical_summary, list(
   n_studies = color_tile("white", "steelblue"),
@@ -1502,13 +1571,14 @@ formattable(categorical_summary, list(
                           `background-color` = ifelse(
                             x < 1,
                             colorRampPalette(c("darkgreen", "white"))(100)[as.numeric(cut(x, breaks = 100))],
-                            colorRampPalette(c("white", "darkred"))(100)[as.numeric(cut(pmin(x, 11), breaks = 100))]
+                            colorRampPalette(c("white", "darkred"))(100)[as.numeric(cut(pmin(x, 12), breaks = 100))]
                           )
                         )
   )
 ))
 # alternatively
-categorical_summary %>%
+categorical_summary$indicatorcategory_level3[is.na(categorical_summary$indicatorcategory_level3)] <- ""  #replace NAs by blanks
+summarytable_cat_indicators <- categorical_summary %>%
   gt() %>%
   data_color(
     columns = n_studies,
@@ -1524,11 +1594,13 @@ categorical_summary %>%
         if (v <= 1) {
           scales::col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
         } else {
-          scales::col_numeric(c("white", "darkred"), domain = c(1, 11))(v)
+          scales::col_numeric(c("white", "darkred"), domain = c(1, 14))(v)
         }
       })
     }
   )
+gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.docx")   
+gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.html")  # interactive HTML
 
 # visualize all odds ratios reported by studies on a plot, excluding those with a missing value
 # first remove extreme values of values with a 
@@ -1547,13 +1619,13 @@ orplot <- ggplot(categorical_df_or, aes(x = reorder(Study_ID, or), y = or, color
     y = "Odds Ratio (log scale)",
     title = "Odds Ratios with 95% Confidence Intervals") +
   theme_minimal(base_size = 13) +
-  facet_grid(rows = vars(indicatorcategory), scales = "free_y", space = "free_y") +
+  facet_grid(rows = vars(indicatorcategory_level2), scales = "free_y", space = "free_y") +
   theme(strip.text.y.left = element_text(angle = 90, hjust = 1, face = "bold"))
 orplot
 ggsave(orplot, filename = "OR_summary.jpeg",  width = 12, height = 49, dpi = 250) 
 
 # subset only studies looking at sex
-categorical_df_or_sex <- categorical_df_or %>% filter(indicatorcategory=="Sex")
+categorical_df_or_sex <- categorical_df_or %>% filter(indicatorcategory_level2=="Sex")
 ggplot(categorical_df_or_sex, aes(x = reorder(Study_ID, or), y = or, color = as.factor(amr))) +
   # geom_point(size = 3) +
   geom_beeswarm(size = 3) +  # spreads points if they are overlapping
