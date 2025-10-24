@@ -1512,23 +1512,19 @@ categorical_df <- categorical_df %>% filter(indicatorcategory_level1!="Microbiol
 # count categorical indicators reported
 length(unique(categorical_df$`Number Variable_description`)) # 2157 cat indicators reported, `Number Variable_description` and `Proportion Variable_description` are the same
 length(unique(categorical_df$`Proportion Variable_description`))
-# simple count, to check
-categorical_summary <- categorical_df %>%
-  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
-  summarise(n_studies = n_distinct(Study_ID))
-categorical_summary
-# summarize the reported indicators, overall and by AMR profile
+
+# summarize the reported indicators, overall 
 categorical_summary <- categorical_df %>%
   group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
   summarise(
     n_studies = n_distinct(Study_ID),                           
-    sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
-    sum_susceptible_tot = sum(Susceptible_group_tot_nb, na.rm = TRUE), 
-    sum_resistant_value = sum(`Number Resistant_group_value`, na.rm = TRUE), 
-    sum_susceptible_value = sum(`Number Susceptible_comparator_group_value`, na.rm = TRUE), 
-    median_or = median(or, na.rm = TRUE),                    
-    q25_or = quantile(or, 0.25, na.rm = TRUE),               # 25th percentile
-    q75_or = quantile(or, 0.75, na.rm = TRUE)                # 75th percentile
+    exposed_R = round(sum(`Number Resistant_group_value`, na.rm = TRUE),0), 
+    total_R = sum(Resistant_group_tot_nb, na.rm = TRUE), 
+    exposed_S = round(sum(`Number Susceptible_comparator_group_value`, na.rm = TRUE),0), 
+    total_S = sum(Susceptible_group_tot_nb, na.rm = TRUE), 
+    median_or = round(median(or, na.rm = TRUE),2),                    
+    q25_or = round(quantile(or, 0.25, na.rm = TRUE),2),               # 25th percentile
+    q75_or = round(quantile(or, 0.75, na.rm = TRUE),2),                # 75th percentile
   ) %>%
   ungroup()
 #reorder so the most frequent are on top
@@ -1541,24 +1537,8 @@ categorical_summary
 categorical_summary <- categorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
   duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
   ungroup()
-categorical_summary
 # export to a spreadsheet
 write_xlsx(categorical_summary, "categorical_summary.xlsx")
-
-categorical_by_amr_summary <- categorical_df %>%
-  group_by(indicatorcategory_level1, indicatorcategory_level2, amr) %>%
-  summarise(
-    n_studies = n_distinct(Study_ID),                           
-    sum_resistant_tot = sum(Resistant_group_tot_nb, na.rm = TRUE), 
-    sum_susceptible_tot = sum(Susceptible_group_tot_nb, na.rm = TRUE), 
-    sum_resistant_value = sum(`Number Resistant_group_value`, na.rm = TRUE), 
-    sum_susceptible_value = sum(`Number Susceptible_comparator_group_value`, na.rm = TRUE), 
-    median_or = median(or, na.rm = TRUE),                    
-    q25_or = quantile(or, 0.25, na.rm = TRUE),               # 25th percentile
-    q75_or = quantile(or, 0.75, na.rm = TRUE)                # 75th percentile
-  ) %>%
-  ungroup()
-categorical_by_amr_summary
 
 # present in a heatmap-style table
 formattable(categorical_summary, list(
@@ -1601,6 +1581,321 @@ summarytable_cat_indicators <- categorical_summary %>%
   )
 gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.docx")   
 gtsave(summarytable_cat_indicators, "summarytable_cat_indicators.html")  # as HTML to open in browser
+
+# with SUBGROUP analyses
+# in high risk populations
+# summarize the reported indicators, overall 
+highriskcategorical_summary <- categorical_df %>%
+  filter(highrisk=="high risk") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_highrisk = n_distinct(Study_ID),                           
+    median_or_highrisk = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+highriskcategorical_summary <- highriskcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_highrisk), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+highriskcategorical_summary <- highriskcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+highriskcategorical_summary <- highriskcategorical_summary %>% select(-indicatorcategory_level1)
+# merge with the overall table
+subgroups_categorical_summary <- left_join(categorical_summary, highriskcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+subgroups_categorical_summary
+
+# key pathogen-antibiotic combinations
+# C3G-R Enterobacterales
+C3GEcategorical_summary <- categorical_df %>%
+  filter(pathogen_antibiotic_combination=="C3G-resistant Enterobacterales") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_c3ge = n_distinct(Study_ID),                           
+    median_or_c3ge = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+C3GEcategorical_summary <- C3GEcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_c3ge), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+C3GEcategorical_summary <- C3GEcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+C3GEcategorical_summary <- C3GEcategorical_summary %>% select(-indicatorcategory_level1)
+C3GEcategorical_summary
+# merge with the overall table
+subgroups_categorical_summary <- left_join(subgroups_categorical_summary, C3GEcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+
+# CR Enterobacterales
+CREcategorical_summary <- categorical_df %>%
+  filter(pathogen_antibiotic_combination=="carbapenem-resistant Enterobacterales") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_cre = n_distinct(Study_ID),                           
+    median_or_cre = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+CREcategorical_summary <- CREcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_cre), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+CREcategorical_summary <- CREcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+CREcategorical_summary <- CREcategorical_summary %>% select(-indicatorcategory_level1)
+CREcategorical_summary
+# merge with the overall table
+subgroups_categorical_summary <- left_join(subgroups_categorical_summary, CREcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+
+# MRSA
+MRSAcategorical_summary <- categorical_df %>%
+  filter(pathogen_antibiotic_combination=="methicillin-resistant S. aureus") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_mrsa = n_distinct(Study_ID),                           
+    median_or_mrsa = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+MRSAcategorical_summary <- MRSAcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_mrsa), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+MRSAcategorical_summary <- MRSAcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+MRSAcategorical_summary <- MRSAcategorical_summary %>% select(-indicatorcategory_level1)
+MRSAcategorical_summary
+# merge with the overall table
+subgroups_categorical_summary <- left_join(subgroups_categorical_summary, MRSAcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+
+# CRAB
+CRABcategorical_summary <- categorical_df %>%
+  filter(pathogen_antibiotic_combination=="carbapenem-resistant A.baumanii") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_crab = n_distinct(Study_ID),                           
+    median_or_crab = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+CRABcategorical_summary <- CRABcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_crab), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+CRABcategorical_summary <- CRABcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+CRABcategorical_summary <- CRABcategorical_summary %>% select(-indicatorcategory_level1)
+CRABcategorical_summary
+# merge with the overall table
+subgroups_categorical_summary <- left_join(subgroups_categorical_summary, CRABcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+
+# vancomycin-resistant Enterococci
+VREcategorical_summary <- categorical_df %>%
+  filter(pathogen_antibiotic_combination=="vancomycin-resistant Enterococci") %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3) %>%
+  summarise(
+    n_studies_vre = n_distinct(Study_ID),                           
+    median_or_vre = round(median(or, na.rm = TRUE),2)) %>%
+  ungroup()
+#reorder so the most frequent are on top
+VREcategorical_summary <- VREcategorical_summary %>%
+  group_by(indicatorcategory_level1, indicatorcategory_level3) %>%
+  arrange(desc(n_studies_vre), .by_group = TRUE) %>%
+  ungroup()
+# keep just once the label of the level 1 categories
+VREcategorical_summary <- VREcategorical_summary %>% mutate(indicatorcategory_level1 = ifelse(
+  duplicated(indicatorcategory_level1), "", indicatorcategory_level1)) %>%
+  ungroup()
+VREcategorical_summary <- VREcategorical_summary %>% select(-indicatorcategory_level1)
+VREcategorical_summary
+# merge with the overall table
+subgroups_categorical_summary <- left_join(subgroups_categorical_summary, VREcategorical_summary, by = c("indicatorcategory_level2", "indicatorcategory_level3"))
+subgroups_categorical_summary
+
+# one HTML table with overall and subgroup analyses
+# take out NA or values that mess up lay out
+subgroups_categorical_summary$indicatorcategory_level3[is.na(subgroups_categorical_summary$indicatorcategory_level3)] <- ""  #replace NAs by blanks
+subgroups_categorical_summary$n_studies_highrisk[is.na(subgroups_categorical_summary$n_studies_highrisk)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$n_studies_c3ge[is.na(subgroups_categorical_summary$n_studies_c3ge)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$n_studies_cre[is.na(subgroups_categorical_summary$n_studies_cre)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$n_studies_mrsa[is.na(subgroups_categorical_summary$n_studies_mrsa)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$n_studies_crab[is.na(subgroups_categorical_summary$n_studies_crab)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$n_studies_vre[is.na(subgroups_categorical_summary$n_studies_vre)] <- 0  #replace NAs by 0
+subgroups_categorical_summary$median_or_cre[is.infinite(subgroups_categorical_summary$median_or_cre)] <- NA # replace Inf values by NA
+
+subgroup_summarytable_cat_indicators <- subgroups_categorical_summary %>%
+  gt() %>%
+  data_color(
+    columns = n_studies,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(1, 125))) %>%
+  data_color(
+    columns = median_or,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 13))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_highrisk,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%  
+  data_color(
+    columns = median_or_highrisk,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 19))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_c3ge,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%
+  data_color(
+    columns = median_or_c3ge,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 23))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_cre,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%
+  data_color(
+    columns = median_or_cre,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 48))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_mrsa,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%
+  data_color(
+    columns = median_or_mrsa,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 15))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_crab,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%
+  data_color(
+    columns = median_or_crab,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 51))(v)
+        }})}) %>%
+  data_color(
+    columns = n_studies_vre,
+    colors = scales::col_numeric(
+      palette = c("white", "steelblue"),
+      domain = c(0, 125))) %>%
+  data_color(
+    columns = median_or_vre,
+    colors = function(x) {
+      sapply(x, function(v) {
+        if (is.na(v)) {
+          "white"  # make NA values white
+        } else if (v <= 1) {
+          col_numeric(c("darkgreen", "white"), domain = c(0, 1))(v)
+        } else {
+          col_numeric(c("white", "darkred"), domain = c(1, 13))(v)
+        }})}) %>%
+  tab_spanner(
+    label = "All included studies",
+    columns = vars(n_studies, exposed_R, total_R, exposed_S, total_S, median_or, q25_or, q75_or)) %>%
+  tab_spanner(
+    label = "Indicators",
+    columns = vars(indicatorcategory_level1, indicatorcategory_level2, indicatorcategory_level3))  %>%
+  tab_spanner(
+    label = "High risk patients",
+    columns = vars(n_studies_highrisk, median_or_highrisk))  %>%
+  tab_spanner(
+    label = "C3G-resistant Enterobacterales",
+    columns = vars(n_studies_c3ge, median_or_c3ge))    %>%
+  tab_spanner(
+    label = "carbapenem-resistant Enterobacterales",
+    columns = vars(n_studies_cre, median_or_cre))    %>%
+  tab_spanner(
+    label = "methicillin-resistant S. aureus",
+    columns = vars(n_studies_mrsa, median_or_mrsa))    %>%
+  tab_spanner(
+    label = "carbapenem-resistant A.baumanii",
+    columns = vars(n_studies_crab, median_or_crab))    %>%
+  tab_spanner(
+    label = "vancomycin-resistant Enterococci",
+    columns = vars(n_studies_vre, median_or_vre))      
+
+# rename colnames
+subgroup_summarytable_cat_indicators <- subgroup_summarytable_cat_indicators %>%
+  cols_label(
+    `indicatorcategory_level1` = "",
+    `indicatorcategory_level2` = "",
+    `indicatorcategory_level3` = "",
+    n_studies = "n studies",
+    `exposed_R` = "exposed resistant",
+    total_R = "total resistant",
+    exposed_S = "exposed susceptible",
+    `total_S` = "total suscep",
+    median_or = "median OR",
+    n_studies_highrisk = "n studies",
+    median_or_highrisk = "median OR",
+    n_studies_c3ge     = "n studies",
+    median_or_c3ge     = "median OR",
+    n_studies_cre      = "n studies",
+    median_or_cre      = "median OR",
+    n_studies_mrsa     = "n studies",
+    median_or_mrsa     = "median OR",
+    n_studies_crab     = "n studies",
+    median_or_crab     = "median OR",
+    n_studies_vre      = "n studies",
+    median_or_vre      = "median OR")
+
+#export in large html or word table
+gtsave(subgroup_summarytable_cat_indicators, "subgroup_summarytable_cat_indicators.docx")   
+gtsave(subgroup_summarytable_cat_indicators, "subgroup_summarytable_cat_indicators.html")  # as HTML to open in browser
 
 # visualize all odds ratios reported by studies on a plot, excluding those with a missing value
 # first remove extreme values of values with a 
