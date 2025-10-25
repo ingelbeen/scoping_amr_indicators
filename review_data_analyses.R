@@ -665,7 +665,7 @@ p_l1 <- ggplot(freq_continuous_l1,
   theme_minimal(base_size = 12)
 
 print(p_l1)
-ggsave("continuous_indicators_bar-chat_level1.png", p_l1, width = 9, height = 6, dpi = 300) #export
+ggsave(filename = "continuous_indicators_bar-chart_level1.jpeg", p_l1, width = 9, height = 6, dpi = 300) #export
 
 #g.heatmap for the top 20 categories - otherwise it does not show well
 top_L2_n <- 20
@@ -712,7 +712,7 @@ p_heat <- ggplot(heat_df, aes(x = L2, y = L1, fill = count)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 print(p_heat)
-ggsave("continuous_indicators_heatmap_categories_l1_l2.png", p_heat, width = 12, height = 7, dpi = 300) #export
+ggsave(filename = "continuous_indicators_heatmap_categories_l1_l2.jpeg", p_heat, width = 12, height = 7, dpi = 300) #export
 
 #h.interactive review table
 # Use already built 'summary_cont_indicators_out' (L1,L2, indicators list, and freq)
