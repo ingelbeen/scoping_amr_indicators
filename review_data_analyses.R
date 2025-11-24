@@ -71,7 +71,7 @@ table(df$studypop, useNA = "always")
 df$highrisk <- case_when(
   (grepl("Immunocompromised", df$Population_admitting_ward, ignore.case = TRUE)==T & grepl("general ", df$Population_admitting_ward, ignore.case = TRUE)==F) ~ "high risk",
   (grepl("Critical", df$Population_admitting_ward, ignore.case = TRUE)==T & grepl("general ", df$Population_admitting_ward, ignore.case = TRUE)==F) ~ "high risk",
-  TRUE ~ "regular, several populations, or unspecified")
+  TRUE ~ "mixed or unspecified population")
 # checked the studies with as admitting ward 'surgical and burns': only #3494 is actually burns (and is also labelled critical) – Burns and ICU patients included from a Burn unit “patients who had clinically relevant Pa BSIs and were registered in the database of the BICU of CologneMerheim Medical Center”
 table(df$Population_admitting_ward, df$highrisk)
 
@@ -231,7 +231,7 @@ summary_bsi_sources <- df %>%
 
 summary_bsi_sources
 
-#BSI_source_nb, variable to count, among known sources - excluding unknown - how many have one source (unique), and how many >1 source (mixed)
+#BSI_source_nb, variable to count, among known sources - excluding unknown - how many have one source (single), and how many >1 source (mixed)
 #then among those unique, what are the specific sources reported
 
 #a.identify columns with known sources (excluding unknown/unclear)
@@ -258,13 +258,13 @@ df <- df %>%
     )
   }))
 
-#c.count number of known sources reported per study and classify as unique or mixed
+#c.count number of known sources reported per study and classify as single or mixed
 df <- df %>%
   mutate(
     bsi_source_count = rowSums(across(all_of(known_bsi_cols)), na.rm = TRUE),
     bsi_source_nb = case_when(
       bsi_source_count == 0 ~ NA_character_,
-      bsi_source_count == 1 ~ "Unique",
+      bsi_source_count == 1 ~ "Single",
       bsi_source_count >  1 ~ "Mixed"
     )
   ) %>%
@@ -289,7 +289,7 @@ bsi_unique_sources <- df %>%
 
 bsi_unique_sources
 
-#INFECTION ORIGIN - deconcatenate and create different col for each source
+#ACQUISITION OF INFECTION (infection origin) - deconcatenate and create different col for each source
 #a.check the "other" category to see if needs to be recategorized under existing ones
 df %>%
   filter(str_detect(.data[["Infection_origin"]], regex("^Other", ignore_case = TRUE))) %>%
@@ -338,7 +338,7 @@ origin_cols <- infection_origin %>%
 summary_infection_origin <- df %>%
   summarise(across(all_of(origin_cols), ~ sum(.x, na.rm = TRUE))) %>%
   pivot_longer(everything(),
-               names_to = "Infection_origin",
+               names_to = "Acquisition of infection",
                values_to = "Count") %>%
   mutate(Proportion = round(Count / nrow(df) * 100, 1)) %>%
   arrange(desc(Count))
@@ -355,7 +355,7 @@ infection_origin_cols <- c(
   "unknown_unspecified_origin"
 )
 
-#b.count known origins (exclude unknown) and classify Unique / Mixed
+#b.count known origins (exclude unknown) and classify Single / Mixed
 known_infection_cols <- setdiff(infection_origin_cols, "unknown_unspecified_origin")
 
 df <- df %>%
@@ -363,7 +363,7 @@ df <- df %>%
     infection_origin_count = rowSums(across(all_of(known_infection_cols)), na.rm = TRUE),
     infection_origin_nb = dplyr::case_when(
       infection_origin_count == 0 ~ NA_character_,
-      infection_origin_count == 1 ~ "Unique",
+      infection_origin_count == 1 ~ "Single",
       infection_origin_count >  1 ~ "Mixed"
     )
   )
@@ -378,9 +378,9 @@ infection_origin_summary
 
 #d.among the Unique group, which specific origins - among known origins only
 infection_origin_unique <- df %>%
-  filter(infection_origin_nb == "Unique") %>%
+  filter(infection_origin_nb == "Single") %>%
   summarise(across(all_of(known_infection_cols), ~ sum(.x, na.rm = TRUE))) %>%
-  pivot_longer(everything(), names_to = "Infection_origin", values_to = "Count") %>%
+  pivot_longer(everything(), names_to = "Acquisition of infection", values_to = "Count") %>%
   arrange(desc(Count)) %>%
   mutate(Proportion = round(Count / sum(Count) * 100, 1))
 
@@ -459,17 +459,18 @@ df <- df %>%
                           ordered = TRUE),
     facility_type = factor(facility_type),
     highrisk = factor(highrisk,
-                      levels = c("high risk","regular, several populations, or unspecified")),
+                      levels = c("high risk","mixed or unspecified population")),
     studypop = factor(studypop,
-                      levels = c("Adults","Adults & pediatrics","All ages or not specified",
-                                 "Neonates","Pediatrics","Pediatrics incl. neonates"))
+                      levels = c("Neonates", "Pediatrics incl. neonates", "Pediatrics", 
+                                 "Adults & pediatrics", "Adults","All ages or not specified",
+                                 ))
   )
 
 
 df <- df %>%
   mutate(
-    bsi_source_nb = factor(bsi_source_nb, levels = c("Mixed", "Unique")),
-    infection_origin_nb = factor(infection_origin_nb, levels = c("Mixed", "Unique"))
+    bsi_source_nb = factor(bsi_source_nb, levels = c("Mixed", "Single")),
+    infection_origin_nb = factor(infection_origin_nb, levels = c("Mixed", "Single"))
   )
 
 #b.ensure BSI/Origin are logical TRUE/FALSE
@@ -547,7 +548,7 @@ tbl_origin_nb <- tbl_summary(
   statistic = list(all_categorical() ~ "{n} ({p}%)"),
   digits = list(all_categorical() ~ c(0, 1)),
   missing = "no",
-  label = list(infection_origin_nb ~ "Infection origin type")
+  label = list(infection_origin_nb ~ "Acquisition of infection type")
 ) |>
   modify_header(all_stat_cols() ~ "**Overall** (N = {N})")
 
@@ -599,7 +600,7 @@ table_1 <- tbl_stack(
   group_header = c(
     "**Study characteristics — n (%)**",
     "**BSI suspected source — n (%)**",
-    "**Infection origin — n (%)**",
+    "**Acquisition of infection — n (%)**",
     "**Total population**"
   )
 ) |>
@@ -621,7 +622,7 @@ ft <- as_flex_table(table_1)
 section_rows <- which(str_remove_all(ft$body$dataset$label, "\\*") %in% c(
   "Study characteristics — n (%)",
   "BSI suspected source — n (%)",
-  "Infection origin — n (%)",
+  "Acquisition of infection — n (%)",
   "Total population"
 ))
 
@@ -649,12 +650,17 @@ df$`resistant_group SD_3` <- as.character(df$`resistant_group SD_3`)
 df$`Model_3 Resistant_group_tot_nb` <- as.character(df$`Model_3 Resistant_group_tot_nb`)
 df$`Model_3 Susceptible_group_tot_nb` <- as.character(df$`Model_3 Susceptible_group_tot_nb`)
 
+#convert to character - df_long identified different types and provided error
+df <- df %>%
+  mutate(across(starts_with("Model"), as.character))
+
 df_long <- df %>%
   pivot_longer(
     cols = matches("^Model_[123]"),
     names_to = c("Model", ".value"),
     names_pattern = "Model_(\\d+) (.*)"
   )
+
 # remove rows which don't contain a comparison -> 216 had model 1, another 24 had a model 2, another 5 had a model 3
 df_long <- df_long %>% filter(!is.na(Resistant_grp_definition))
 
@@ -2881,6 +2887,8 @@ summary_cat_indicators_out <- pairs_l1_l2 %>%
   left_join(freq_cat_l1, by = "indicatorcategory_level1") %>%
   arrange(indicatorcategory_level1, desc(frequency_category_l2))
 
+summary_cat_indicators_out
+
 #e.view and export
 print(summary_cat_indicators_out, n = 20)
 write_xlsx(
@@ -3064,15 +3072,19 @@ df_summary <- df %>%
   count(facilitylevel, name = "n") %>%
   arrange(desc(n))
 df_summary$facilitylevel <- factor(df_summary$facilitylevel, levels = c("Unknown/unclear", "Mixed/Other", "Tertiary", "Secondary", "Primary"))
+
+df_summary <- df_summary %>%
+  mutate(facilitylevel = reorder(facilitylevel, n))
+
 ggplot(df_summary, aes(x = facilitylevel, y = n, fill = facilitylevel)) +
   geom_col(show.legend = FALSE, width = 0.6) +
   coord_flip() +
   scale_fill_manual(values = c(
-    "Primary" = "#005AB5",
-    "Secondary" = "#DC3220",
-    "Tertiary" = "#7B8D8E",
-    "Unknown/unclear" = "#999999",
-    "Mixed/Other" = "#E17C05"
+    "Tertiary" = "#555555",
+    "Primary" = "#00008B",
+    "Secondary" = "#8B0000",
+    "Unknown/unclear" = "#006400",
+    "Mixed/Other" = "#999999"
   )) +
   labs(
     title = "Studies by healthcare facility level",
@@ -3085,62 +3097,87 @@ ggplot(df_summary, aes(x = facilitylevel, y = n, fill = facilitylevel)) +
     panel.grid.minor = element_blank(),
     panel.grid.major.x = element_line(color = "grey80"),
     plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA)
+    panel.background = element_rect(fill = "white", color = NA),
+    axis.text.x = element_text(size = 12),   
+    axis.text.y = element_text(size = 12),  
+    axis.title.y = element_text(size = 14),  
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)  
   )
+  
 ggsave(filename = "bar_chart_healthcare_level.jpeg",  width = 8, height = 5, dpi = 300)
 
-# 1.5 patient population
-patientpop <- df %>% select(Population_admitting_ward) %>%
-  mutate(Population_admitting_ward = str_split(Population_admitting_ward, ";")) %>%
-  unnest(Population_admitting_ward) %>%
-  mutate(Population_admitting_ward = str_trim(Population_admitting_ward),
-         Population_admitting_ward = case_when(
-           str_detect(Population_admitting_ward, "Critical") ~ "Critical",
-           str_detect(Population_admitting_ward, "Immunocompromised") ~ "Immunocompromised",
-           str_detect(Population_admitting_ward, "Neonates") ~ "Neonates",
-           str_detect(Population_admitting_ward, "Pediatric") ~ "Pediatric",
-           str_detect(Population_admitting_ward, "Adult") ~ "Adult",
-           str_detect(Population_admitting_ward, "Emergency") ~ "Critical",
-           str_detect(Population_admitting_ward, "Surgical") ~ "Surgical",
-           str_detect(Population_admitting_ward, "General") ~ "General",
-           str_detect(Population_admitting_ward, "Unknown") ~ "Unknown/Unclear",
-           str_detect(Population_admitting_ward, "Other") ~ "Other",
-           str_detect(Population_admitting_ward, "covid19") ~ "Other",
-           TRUE ~ Population_admitting_ward
-         ))
-patientpop_summary <- patientpop %>%
-  count(Population_admitting_ward, name = "n") %>%
-  arrange(desc(n))
-print(patientpop_summary) # not sure what to make of the category 'general'
-ggplot(patientpop_summary, aes(x = reorder(Population_admitting_ward, n), y = n, fill = Population_admitting_ward)) +
+# 1.5 patient population - highrisk
+highrisk_summary <- df_long %>%
+  count(highrisk, sort = TRUE) %>% 
+mutate(pct = n / sum(n) * 100) 
+
+highrisk_summary
+
+my_colors <- c(
+  "high risk" = "#8B0000",
+  "mixed or unspecified" = "#999999"
+)
+
+ggplot(highrisk_summary, aes(x = fct_reorder(highrisk, n), y = n, fill = highrisk)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = paste0(round(pct, 1), "%")),    
+            hjust = -0.1, size = 4) +  
+  coord_flip() +
+  scale_fill_manual(values = my_colors) +
+  labs(
+    x = "popuation type",
+    y = "Number",
+    title = "Distribution of type of population"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none") +
+  expand_limits(y = max(highrisk_summary$n) * 1.15)
+
+
+ggsave(filename = "bar_chart_highrisk.jpeg",  width = 8, height = 5, dpi = 300)
+
+#age group - study population
+
+studypop_levels <- c(
+  "Neonates",
+  "Pediatrics incl. neonates",
+  "Pediatrics",
+  "Adults & pediatrics",
+  "Adults",
+  "All ages or not specified"
+)
+
+studypop_summary <- df_long %>%
+  mutate(
+    studypop = str_trim(studypop),
+    studypop = factor(studypop, levels = studypop_levels)
+  ) %>%
+  count(studypop) %>%
+  mutate(pct = n / sum(n) * 100)
+
+ggplot(studypop_summary, aes(x = studypop, y = n, fill = studypop)) +
   geom_col(show.legend = FALSE, width = 0.6) +
+  geom_text(aes(label = paste0(round(pct, 1), "%")), hjust = -0.1, size = 4) +
   coord_flip() +
   scale_fill_manual(values = c(
-    "Adult" = "#005AB5",
-    "Pediatric" = "#DC3220",
-    "Neonates" = "#E17C05",
-    "Critical" = "#7B8D8E",
-    "Immunocompromised" = "#4C9F70",
-    "Surgical/Burns" = "#FF9F1C",
-    "General" = "#999999",
-    "Other" = "#8E6C8A",
-    "Unknown/Unclear" = "#CCCCCC"
+    "Adults" = "#191970",
+    "Pediatrics" = "#005AB5",
+    "Neonates" = "#333333",
+    "Adults & pediatrics" = "#006400",
+    "Pediatrics incl. neonates" = "#CCCCCC",
+    "All ages or not specified" = "#8B0000"
   )) +
   labs(
-    title = "Studies by patient population*",
+    title = "Studies by age group",
     x = NULL,
     y = "Number of studies",
     caption = "*If multiple patient populations are included, each subpopulation is counted"
   ) +
-  theme_minimal(base_family = "sans") +
-  theme(
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    panel.grid.major.x = element_line(color = "grey80"),
-    plot.background = element_rect(fill = "white", color = NA),
-    panel.background = element_rect(fill = "white", color = NA)
-  )
-ggsave(filename = "bar_chart_study_population.jpeg",  width = 8, height = 5, dpi = 300)
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none") +
+  expand_limits(y = max(studypop_summary$n) * 1.15)
+
+ggsave(filename = "bar_chart_study_age_group.jpeg",  width = 8, height = 5, dpi = 300)
 
 # bacterial isolates
 isolates <- df %>%
@@ -3206,9 +3243,40 @@ ggplot(counts, aes(x = fct_reorder(amr, n), y = n)) +
   theme_minimal(base_size = 13)
 ggsave(filename = "bar_chart_AMR_profiles.jpeg",  width = 8, height = 5, dpi = 300)
 
-# create a variable for each pathogen-antibiotic combination
+# summarize pathogen-antibiotic combination
 
+pathogen_ab <- df_long %>%
+  count(pathogen_antibiotic_combination, sort = TRUE) %>% 
+mutate(pct = n / sum(n) * 100)
 
+pathogen_ab
+
+my_colors <- c(
+  "other/combination of multiple pathogens" = "#8B0000",
+  "C3G-resistant Enterobacterales" = "#00008B",
+  "carbapenem-resistant Enterobacterales" = "#006400",
+  "methicillin-resistant S. aureus" = "#555555",
+  "carbapenem-resistant A.baumanii" = "#228B22",
+  "vancomycin-resistant Enterococci" = "#A52A2A",
+  "carbapenem-resistant P.aeruginosa" = "#191970",
+  "penicillin-resistant S.pneumoniae" = "#999999"
+)
+
+ggplot(pathogen_ab, aes(x = fct_reorder(pathogen_antibiotic_combination, n), y = n, fill = pathogen_antibiotic_combination)) +
+  geom_col() +
+  geom_text(aes(label = paste0(round(pct, 1), "%")), hjust = -0.1, size = 4) +
+  coord_flip() +
+  scale_fill_manual(values = my_colors) +
+  labs(
+    x = "Resistance profile",
+    y = "Number of analyses",
+    title = "Distribution of reported pathogen - \nAMR profiles in the analysis"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(legend.position = "none") +
+  expand_limits(y = max(studypop_summary$n) * 1.15)
+
+ggsave(filename = "bar_chart_AMR_profiles.jpeg",  width = 8, height = 5, dpi = 300)
 
 
 
